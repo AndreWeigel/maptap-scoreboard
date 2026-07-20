@@ -23,10 +23,14 @@ function createApp(db, status) {
     });
   });
 
+  // 503 when WhatsApp is down. The web server being up says nothing about whether
+  // we're still recording results, and a monitor shouldn't have to know to grep the
+  // body to find that out. The page reads the body either way (fetch ignores 5xx).
   app.get('/healthz', (_req, res) => {
-    res.json({
-      status: 'ok',
-      whatsappConnected: status.whatsappConnected,
+    const ok = status.whatsappConnected;
+    res.status(ok ? 200 : 503).json({
+      status: ok ? 'ok' : 'degraded',
+      whatsappConnected: ok,
       lastMessageAt: status.lastMessageAt,
     });
   });
