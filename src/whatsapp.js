@@ -60,6 +60,13 @@ async function startWhatsApp(db, status) {
       }
       if (jid !== config.GROUP_ID) continue;
 
+      // A message that failed to decrypt arrives with no `.message` at all. That's
+      // indistinguishable from "nobody posted" unless we say so — and it's the one
+      // failure mode that leaves no parse_failures row behind.
+      if (!msg.message) {
+        console.log(`[whatsapp] undecryptable message from ${msg.key.participant || jid} — skipped`);
+        continue;
+      }
       const text = extractText(msg);
       if (!text) continue;
       status.lastMessageAt = new Date().toISOString();
