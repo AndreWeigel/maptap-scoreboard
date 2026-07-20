@@ -5,6 +5,9 @@ services:
     build: .
     container_name: maptap-scoreboard
     restart: always
+    # Without this, node is PID 1 and Linux ignores SIGTERM there — every stop
+    # waited out the 10s timeout and got SIGKILLed mid-write to the auth files.
+    init: true
     environment:
       # Empty = discovery mode: the bot logs every group JID it sees.
       GROUP_ID: ${GROUP_ID:-}
