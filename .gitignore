@@ -14,6 +14,7 @@ data/
 # Secrets / local env
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 

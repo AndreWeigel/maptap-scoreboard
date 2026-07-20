@@ -1,0 +1,17 @@
+# maptap-scoreboard — WhatsApp bot + web scoreboard
+# Deployed on the personal-cloud server (nginx proxies maptap.andreweigel.me).
+services:
+  maptap:
+    build: .
+    container_name: maptap-scoreboard
+    restart: always
+    environment:
+      # Empty = discovery mode: the bot logs every group JID it sees.
+      GROUP_ID: ${GROUP_ID:-}
+      TZ: ${TZ:-Europe/Madrid}
+      SEASON_START: ${SEASON_START:-2026-01-01}
+    volumes:
+      # SQLite DB + Baileys WhatsApp session. Losing this = re-scan the QR.
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"

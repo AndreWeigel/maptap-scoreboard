@@ -55,15 +55,26 @@ sqlite3 data/scores.db "UPDATE results SET player_id='4917...@s.whatsapp.net' WH
 node scripts/recompute.js
 ```
 
-## Running in production
+## Running in production (Docker)
 
-Use a process manager with auto-restart, e.g. pm2:
+Deployed on the personal-cloud server; nginx proxies `maptap.andreweigel.me` →
+`127.0.0.1:3000` (config lives in the `personal-cloud` repo as `nginx/maptap.conf`).
 
 ```sh
-pm2 start src/index.js --name maptap && pm2 save
+git clone https://github.com/AndreWeigel/maptap-scoreboard.git ~/maptap-scoreboard
+cd ~/maptap-scoreboard
+cp .env.example .env          # leave GROUP_ID empty for the first run
+docker compose up -d --build
+docker compose logs -f        # scan the QR printed here, then note the group JID
 ```
 
-- **Backups:** `data/scores.db` is the entire history — copy it periodically.
+The QR prints to the container log, so `docker compose logs -f` is where you scan it.
+Once you have the group JID, put it in `.env` and `docker compose up -d` again.
+
+Update: `git pull && docker compose up -d --build`.
+
+- **Backups:** `data/` (mounted volume) holds the DB *and* the WhatsApp session —
+  `data/scores.db` is the entire history, copy it periodically.
 - **Reconnects** are automatic; a re-scan is only needed if WhatsApp logs the device
   out (the bot logs this explicitly — then delete `data/auth/` and restart).
 - Parse failures (format drift) land in the `parse_failures` table and the log —
