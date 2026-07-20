@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap Scoreboard</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #10141c; color: #e8ecf2;
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 1.5rem; margin: 0; }
+  .sub { color: #93a0b4; font-size: .85rem; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e5534b; margin-right: 4px; }
+  .dot.on { background: #4ade80; }
+  .badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .badge { background: #1a2130; border: 1px solid #29344a; border-radius: 10px; padding: 12px 14px; }
+  .badge .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #93a0b4; }
+  .badge .value { font-size: 1.25rem; font-weight: 700; margin-top: 2px; }
+  .badge .who { font-size: .85rem; color: #93a0b4; }
+  .tablebox { overflow-x: auto; background: #1a2130; border: 1px solid #29344a; border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { padding: 10px 14px; text-align: right; white-space: nowrap; }
+  th { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #93a0b4; border-bottom: 1px solid #29344a; }
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  tr.leader { background: rgba(250, 204, 21, .08); }
+  tr.leader td:nth-child(2)::after { content: " 👑"; }
+  tbody tr:not(:last-child) td { border-bottom: 1px solid #222b3d; }
+  footer { margin-top: 16px; color: #93a0b4; font-size: .8rem; display: flex; gap: 16px; align-items: center; }
+  button { background: #29344a; color: #e8ecf2; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🗺️ MapTap Scoreboard</h1>
+    <span class="sub" id="season"></span>
+    <span class="sub"><span class="dot" id="wadot"></span>WhatsApp</span>
+  </header>
+  <div class="badges" id="badges"></div>
+  <div class="tablebox">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Player</th><th>Wins</th><th>Podiums</th><th>Avg</th>
+        <th>Best</th><th>Played</th><th>Part. %</th><th>🔥</th><th>😱</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <footer>
+    <span id="updated"></span>
+    <button onclick="load()">Reload</button>
+  </footer>
+</div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function badge(label, value, who) {
+  return `<div class="badge"><div class="label">${label}</div>
+    <div class="value">${esc(value)}</div><div class="who">${esc(who || '')}</div></div>`;
+}
+
+async function load() {
+  const s = await (await fetch('/api/standings')).json();
+  document.getElementById('season').textContent = `Season since ${s.seasonStart} · ${s.activeDays} active days`;
+  document.getElementById('updated').textContent = 'Updated ' + new Date(s.updatedAt).toLocaleTimeString();
+
+  const b = s.badges;
+  document.getElementById('badges').innerHTML = [
+    b.record && badge('All-time record', b.record.score, `${b.record.name} · ${b.record.date}`),
+    b.mostFire && badge('Most 🔥 rounds', b.mostFire.count, b.mostFire.name),
+    b.mostPanic && badge('Most 😱 rounds', b.mostPanic.count, b.mostPanic.name),
+    b.currentWinStreak && badge('Win streak', b.currentWinStreak.length, b.currentWinStreak.name),
+    b.longestParticipationStreak && badge('Longest run', b.longestParticipationStreak.length + ' days', b.longestParticipationStreak.name),
+  ].filter(Boolean).join('');
+
+  document.getElementById('rows').innerHTML = s.leaderboard.map((p, i) => `
+    <tr class="${i === 0 && p.wins > 0 ? 'leader' : ''}">
+      <td>${i + 1}</td><td>${esc(p.name)}</td><td><b>${p.wins}</b></td>
+      <td>${p.podiums.join('/')}</td><td>${p.avgFinal}</td><td>${p.best}</td>
+      <td>${p.played}</td><td>${p.participationPct}%</td>
+      <td>${p.fireRounds}</td><td>${p.panicRounds}</td>
+    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center">No results yet</td></tr>';
+
+  const h = await (await fetch('/healthz')).json();
+  document.getElementById('wadot').className = 'dot' + (h.whatsappConnected ? ' on' : '');
+}
+
+load();
+setInterval(load, 5 * 60 * 1000);
+</script>
+</body>
+</html>

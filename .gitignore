@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Runtime data: SQLite DB (config.DB_PATH = data/scores.db)
+# and Baileys WhatsApp auth/credentials (config.AUTH_DIR = data/auth).
+# NEVER commit data/ — it contains a live WhatsApp session.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Secrets / local env
+.env
+.env.*
+*.pem
+*.key
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
