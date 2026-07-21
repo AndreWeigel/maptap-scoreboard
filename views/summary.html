@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Digest settings</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070b1c; --bg-2: #0a1030; --panel: rgba(16,22,52,.9); --border: rgba(130,155,255,.16);
+    --text: #eaf0ff; --muted: #98a4d4; --cyan: #22d3ee; --green: #4ade80;
+    --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 48px 20px; color: var(--text);
+    font: 15px/1.55 var(--body); background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  h1 { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+  a.back { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: .95rem; }
+  a.back:hover { color: var(--cyan); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 8px 20px; margin: 20px 0; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .row .name { font-weight: 600; }
+  .row .desc { color: var(--muted); font-size: .85rem; margin-top: 3px; }
+  .switch { position: relative; width: 56px; height: 30px; flex: none; padding: 0; cursor: pointer; border-radius: 999px;
+    border: 1px solid var(--border); background: rgba(10,14,34,.72); transition: background .2s, border-color .2s; }
+  .switch[aria-checked="true"] { background: rgba(74,222,128,.25); border-color: rgba(74,222,128,.5); }
+  .switch .knob { position: absolute; top: 50%; left: 3px; transform: translateY(-50%); width: 24px; height: 24px;
+    border-radius: 50%; background: #cdd8ee; transition: left .22s cubic-bezier(.4,1.3,.5,1), background .2s; }
+  .switch[aria-checked="true"] .knob { left: 29px; background: var(--green); }
+  .switch:disabled { opacity: .5; cursor: wait; }
+  #status { min-height: 1.2em; font-family: var(--mono); font-size: .9rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Scoreboard</a>
+  <h1>Digest settings</h1>
+  <div class="panel">
+    <div class="row">
+      <div>
+        <div class="name">Daily digest</div>
+        <div class="desc">Nightly winner + best/avg line posted to the group.</div>
+      </div>
+      <button class="switch" id="dailySummary" role="switch" aria-checked="false" aria-label="Daily digest"><span class="knob"></span></button>
+    </div>
+    <div class="row">
+      <div>
+        <div class="name">Weekly recap</div>
+        <div class="desc">Monday recap of the prior week (wins, record, streak).</div>
+      </div>
+      <button class="switch" id="weeklySummary" role="switch" aria-checked="false" aria-label="Weekly recap"><span class="knob"></span></button>
+    </div>
+  </div>
+  <div id="status"></div>
+</div>
+<script>
+const KEYS = ['dailySummary', 'weeklySummary'];
+const status = document.getElementById('status');
+function render(s) {
+  for (const k of KEYS) document.getElementById(k).setAttribute('aria-checked', !!s[k]);
+}
+async function save(patch) {
+  for (const k of KEYS) document.getElementById(k).disabled = true;
+  try {
+    const s = await (await fetch('/api/settings', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch),
+    })).json();
+    render(s);
+    status.textContent = 'Saved ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    status.textContent = 'Save failed — try again';
+  } finally {
+    for (const k of KEYS) document.getElementById(k).disabled = false;
+  }
+}
+for (const k of KEYS) {
+  document.getElementById(k).addEventListener('click', (e) => {
+    const on = e.currentTarget.getAttribute('aria-checked') === 'true';
+    save({ [k]: !on });
+  });
+}
+(async () => {
+  try { render(await (await fetch('/api/settings')).json()); status.textContent = 'Ready'; }
+  catch { status.textContent = 'Could not load settings'; }
+})();
+</script>
+</body>
+</html>

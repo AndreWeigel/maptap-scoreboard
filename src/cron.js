@@ -3,6 +3,7 @@ const config = require('../config');
 const { toDateStr } = require('./parser');
 const { dailySummary, weeklySummary } = require('./summary');
 const { resolveRows } = require('./users');
+const settings = require('./settings');
 
 function send(status, text) {
   if (!text) return;
@@ -21,20 +22,21 @@ function priorWeek(now) {
   return { from: toDateStr(from), to: toDateStr(to) };
 }
 
+// Both jobs are always scheduled; the runtime setting (toggled from /summary)
+// decides whether each one actually posts. That's what lets the toggle take
+// effect without a restart.
 function startCron(db, status) {
-  if (config.DAILY_SUMMARY) {
-    cron.schedule(config.CRON_TIME, () => {
-      const playDate = toDateStr(new Date());
-      send(status, dailySummary(resolveRows(db.getResults(playDate, playDate)), playDate));
-    }, { timezone: config.TZ });
-  }
+  cron.schedule(config.CRON_TIME, () => {
+    if (!settings.get().dailySummary) return;
+    const playDate = toDateStr(new Date());
+    send(status, dailySummary(resolveRows(db.getResults(playDate, playDate)), playDate));
+  }, { timezone: config.TZ });
 
-  if (config.WEEKLY_SUMMARY) {
-    cron.schedule(config.WEEKLY_CRON, () => {
-      const { from, to } = priorWeek(new Date());
-      send(status, weeklySummary(resolveRows(db.getResults(from, to)), from, to, config));
-    }, { timezone: config.TZ });
-  }
+  cron.schedule(config.WEEKLY_CRON, () => {
+    if (!settings.get().weeklySummary) return;
+    const { from, to } = priorWeek(new Date());
+    send(status, weeklySummary(resolveRows(db.getResults(from, to)), from, to, config));
+  }, { timezone: config.TZ });
 }
 
 module.exports = { startCron, priorWeek };

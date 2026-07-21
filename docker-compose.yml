@@ -13,6 +13,11 @@ services:
       GROUP_ID: ${GROUP_ID:-}
       TZ: ${TZ:-Europe/Madrid}
       SEASON_START: ${SEASON_START:-2026-01-01}
+      # Password for /summary + /admin (HTTP Basic Auth). Empty = those pages locked.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Starting state for the digests; /summary toggles override at runtime.
+      DAILY_SUMMARY: ${DAILY_SUMMARY:-false}
+      WEEKLY_SUMMARY: ${WEEKLY_SUMMARY:-false}
     volumes:
       # SQLite DB + Baileys WhatsApp session. Losing this = re-scan the QR.
       - ./data:/app/data
