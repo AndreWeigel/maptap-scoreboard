@@ -17,9 +17,9 @@ const USERS = [
   { name: 'Mila',       ids: ['173104512901278@lid', 'Mila Andonova'] },
   { name: 'Jan-Niklas', ids: ['95670480408676@lid', 'Jan-Niklas C.', 'Jan-Niklas'] },
   { name: 'Daniel',     ids: ['59777438757039@lid', 'Daniel Couvinha'] },
-  { name: 'Fernando',   ids: ['Fernando Zu'] },
+  { name: 'Fernando',   ids: ['123287153688707@lid', 'Fernando Zu'] },
   { name: 'Afroze',     ids: ['Afroze Ibrahim'] },
-  { name: 'Dennis',     ids: [DENNIS_ID] },
+  { name: 'Dennis',     ids: ['251281373409410@lid', DENNIS_ID] },
 ];
 
 const NAME_BY_ID = new Map();
