@@ -24,6 +24,7 @@ async function startWhatsApp(db, status) {
     logger: pino({ level: 'warn' }),
   });
 
+  status.sock = sock; // so cron can post digests to the group; refreshed on reconnect
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {

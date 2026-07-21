@@ -1,8 +1,12 @@
 # MapTap WhatsApp Scoreboard
 
-Always-on bot that listens to one WhatsApp group, parses daily [maptap.gg](https://www.maptap.gg)
-results, and serves a live scoreboard (wins, podiums, streaks, 🔥/😱 badges).
-Single Node process: Baileys (WhatsApp linked device) + SQLite + Express + node-cron.
+An always-on bot that watches one WhatsApp group, parses the daily
+[maptap.gg](https://www.maptap.gg) results people post, and serves a live
+scoreboard: wins, podiums, streaks, and the odd 🔥/😱 badge.
+
+It's one Node process the whole way down — Baileys for WhatsApp (as a linked
+device), SQLite for storage, Express for the web bit, node-cron for the daily
+scoring.
 
 ## Setup
 
@@ -12,32 +16,33 @@ npm test        # parser/scoring/ingest tests
 npm start
 ```
 
-On first run a QR code prints in the terminal — scan it from your phone:
-**WhatsApp → Settings → Linked devices → Link a device.** Auth is persisted in
-`data/auth/`, so this is a one-time step; restarts reconnect silently.
+First run prints a QR code in the terminal. Scan it from your phone under
+WhatsApp → Settings → Linked devices → Link a device. The session is saved to
+`data/auth/`, so you only do this once; restarts reconnect on their own.
 
 ### Finding the group JID
 
-Leave `GROUP_ID` empty in `config.js` and start the bot. Post anything in the target
-group — the bot logs `group message seen — JID: 1234...@g.us`. Copy that JID into
-`config.js` and restart.
+Leave `GROUP_ID` empty in `config.js` and start the bot. Post anything in the
+group you want to track — the bot logs `group message seen — JID: 1234...@g.us`.
+Copy that JID into `config.js` and restart.
 
 ## Config
 
 Everything lives in [config.js](config.js): group JID, timezone, season start,
-cron time, port, 🔥/😱 thresholds.
+cron time, port, and the 🔥/😱 thresholds.
 
-- **Seasons:** all queries filter `play_date >= SEASON_START`. To reset for a new
-  season, change `SEASON_START` — no data is deleted.
-- The API accepts `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD` for any range.
+Seasons are just a date filter — every query uses `play_date >= SEASON_START`.
+To start a new season, bump `SEASON_START`; nothing gets deleted. If you want an
+arbitrary range, the API takes one:
+`GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`.
 
-## Scoreboard
+## Endpoints
 
-- `GET /` — the scoreboard page (auto-refreshes every 5 min)
-- `GET /api/standings` — leaderboard + badges JSON
+- `GET /` — the scoreboard page, auto-refreshes every 5 min
+- `GET /api/standings` — leaderboard + badges as JSON
 - `GET /healthz` — `{ whatsappConnected, lastMessageAt }`
 
-No auth — run it behind your existing reverse proxy.
+There's no auth. Put it behind whatever reverse proxy you already run.
 
 ## Scripts
 
@@ -47,8 +52,9 @@ node scripts/recompute.js             # rebuild daily_results cache from results
 node scripts/score-day.js 2026-07-20  # (re)score one date
 ```
 
-**Backfill note:** chat exports contain display names, not WhatsApp IDs, so backfilled
-rows use the name as `player_id`. If the same player later posts live (JID id), merge once:
+One gotcha with backfills: chat exports have display names, not WhatsApp IDs, so
+those rows use the name as `player_id`. When that same person later posts live
+(and shows up under a real JID), merge them once:
 
 ```sh
 sqlite3 data/scores.db "UPDATE results SET player_id='4917...@s.whatsapp.net' WHERE player_id='Alice';"
@@ -57,25 +63,31 @@ node scripts/recompute.js
 
 ## Running in production (Docker)
 
-Deployed on the personal-cloud server; nginx proxies `maptap.andreweigel.me` →
-`127.0.0.1:3000` (config lives in the `personal-cloud` repo as `nginx/maptap.conf`).
+Runs on the personal-cloud server, with nginx proxying
+`maptap.andreweigel.me` → `127.0.0.1:3000` (that config lives in the
+`personal-cloud` repo as `nginx/maptap.conf`).
 
 ```sh
 git clone https://github.com/AndreWeigel/maptap-scoreboard.git ~/maptap-scoreboard
 cd ~/maptap-scoreboard
 cp .env.example .env          # leave GROUP_ID empty for the first run
 docker compose up -d --build
-docker compose logs -f        # scan the QR printed here, then note the group JID
+docker compose logs -f        # the QR prints here — scan it, then grab the group JID
 ```
 
-The QR prints to the container log, so `docker compose logs -f` is where you scan it.
-Once you have the group JID, put it in `.env` and `docker compose up -d` again.
+The QR shows up in the container log, so `docker compose logs -f` is where you
+scan it. Once you've got the group JID, drop it in `.env` and run
+`docker compose up -d` again.
 
-Update: `git pull && docker compose up -d --build`.
+To update: `git pull && docker compose up -d --build`.
 
-- **Backups:** `data/` (mounted volume) holds the DB *and* the WhatsApp session —
-  `data/scores.db` is the entire history, copy it periodically.
-- **Reconnects** are automatic; a re-scan is only needed if WhatsApp logs the device
-  out (the bot logs this explicitly — then delete `data/auth/` and restart).
-- Parse failures (format drift) land in the `parse_failures` table and the log —
-  check it if someone's result doesn't show up.
+A few things worth knowing:
+
+- **Backups.** `data/` (the mounted volume) holds both the DB and the WhatsApp
+  session. `data/scores.db` is your entire history — copy it somewhere safe now
+  and then.
+- **Reconnects** happen on their own. You only need to re-scan if WhatsApp
+  actually logs the device out, and the bot says so in the log when that
+  happens — delete `data/auth/` and restart.
+- **Missing results?** Parse failures (usually format drift) land in the
+  `parse_failures` table and the log. That's the first place to look.

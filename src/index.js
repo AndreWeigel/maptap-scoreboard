@@ -13,7 +13,7 @@ startWhatsApp(db, status).catch((err) => {
   console.error('[whatsapp] fatal:', err);
   process.exit(1); // let pm2/systemd restart us
 });
-startCron(db);
+startCron(db, status);
 createApp(db, status).listen(config.PORT, () => {
   console.log(`[web] scoreboard at http://localhost:${config.PORT}`);
 });
