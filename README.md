@@ -129,27 +129,59 @@ A few things worth knowing:
 
 ## Read this, Fernando
 
-Hey Fernando 👋 — here's the whole thing in plain words, no tech needed.
+Hey Fernando — you'll want the actual architecture, so here it is end to end.
 
-You already play [maptap.gg](https://www.maptap.gg) every day and paste your
-result into the group. That's the entire job. A little bot lives in the chat and
-quietly writes down every score it sees — no command, no tagging anyone. Post
-like you always do and you're on the board.
+**Stack.** One Node process. [Baileys](https://github.com/WhiskeySockets/Baileys)
+holds a WhatsApp Web session as a *linked device* (not the Business API — it's
+the same protocol your phone's "Linked devices" uses), `better-sqlite3` for
+storage, Express for HTTP, `node-cron` for the scheduled digests. It runs in
+Docker behind nginx (TLS + reverse proxy) on André's box.
 
-See the standings here: **https://maptap.andreweigel.me**
+**Ingest path.** Baileys emits a `messages.upsert` event per incoming message
+([whatsapp.js](src/whatsapp.js)). The handler filters to the one configured group
+JID, pulls `player_id = key.participant` (your stable WhatsApp id — a
+`…@lid`, *not* your display name) and `player_name = pushName`, then hands the
+text to the parser. `fromMe` posts count; undecryptable messages (no `.message`
+payload) are logged and skipped so they don't vanish silently.
 
-- There are **two views**, flipped with the little spinning 🌍 switch at the top:
-  **Leaderboard** (wins, averages, streaks, the all-time record) and
-  **Daily winners** (who took each day).
-- Your name shows as just **Fernando**, even though WhatsApp calls you "Fer" —
-  the bot knows both are you, so all your games count as one player. If you ever
-  switch phones you might briefly show up twice; just tell André and it gets
-  stitched back together.
-- **Messed up a score?** Post that day's result again — the newer one quietly
-  replaces the old one. No harm done.
-- The **🔥 badge** is for monster rounds, **😱** for the painful ones. "Most
-  consistent 📅" goes to whoever plays the most days — and so far that's *you*,
-  more days than anyone. Keep it up.
+**Parsing** ([parser.js](src/parser.js)) is anchor-based, not a rigid template.
+It regexes `Final score:\s*(\d+)`, then walks *backwards* from that line to the
+first line containing exactly five integers — those are your rounds. Everything
+else (emoji, reactions, trailing shouts) is noise by construction, so the format
+is robust to the junk people append. The play-date comes from the
+`maptap.gg <Month> <Day>` header, not the wall clock — the header wins so a
+00:10 post belongs to the correct day. Month words are normalized (lowercased,
+diacritics stripped via NFD) and matched against an EN+DE table; a future-dated
+header rolls back a year; an unknown month falls back to the server date.
 
-No app to install, no login, nothing to remember. Play, paste, glance at the
-site. That's the game. 🌍
+**Storage.** Immutable append-ish `results` table with
+`UNIQUE(play_date, player_id)` — a re-post for the same day does an
+`ON CONFLICT … DO UPDATE`, so correcting a score is just posting again. Failed
+parses go to `parse_failures`. There is **no** precomputed standings table:
+everything is derived on read.
+
+**Identity.** This is the interesting bit. Backfilled history (imported chat
+exports) keyed players by *display name*; live messages key by `…@lid`. So one
+human can arrive under several ids. [`src/users.js`](src/users.js) is a hardcoded
+registry mapping each person's ids → one canonical name, applied at read time via
+`resolveRows()` — raw rows are never mutated. That's why you're **"Fernando"**
+and not "Fer": your `…@lid` and your old export name both resolve to the same
+entry. An id not in the registry renders as `Name (user not registered yet)`
+until it's added. (You were one of these until you first posted live.)
+
+**Standings** ([scoring.js](src/scoring.js)) are pure functions over the rows:
+`rankDay` does competition ranking (ties share rank, next rank skips),
+`computeStandings` aggregates wins/podiums/averages/streaks/records, and
+`dailyHistory` yields per-day rankings. `GET /api/standings` returns all of it as
+JSON; the front-end ([scoreboard.html](views/scoreboard.html)) is a single page
+that toggles Leaderboard ⟷ Daily winners and repolls every 5 min.
+
+**Digests.** Two cron jobs (nightly, Monday) are always scheduled but gated on a
+runtime flag in `data/settings.json`, toggled from `/summary` (HTTP Basic Auth).
+That page also has "Send now" buttons hitting `/admin/summary?send=1`.
+
+**TL;DR for you:** paste your maptap result in the group like normal; the parser
+grabs the five rounds + final, dedupes by day, and your `…@lid` folds into the
+"Fernando" identity. Standings recompute from raw rows on every page load — no
+caches to bust. Board's at **https://maptap.andreweigel.me**. And yes, "Most
+consistent 📅" is currently you: more play-days than anyone.
