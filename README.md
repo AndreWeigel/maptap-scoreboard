@@ -29,20 +29,57 @@ Copy that JID into `config.js` and restart.
 ## Config
 
 Everything lives in [config.js](config.js): group JID, timezone, season start,
-cron time, port, and the 🔥/😱 thresholds.
+cron time, port, and the 🔥/😱 thresholds. A few are env-overridable for Docker
+(see [.env.example](.env.example)) — notably `ADMIN_TOKEN` (the admin password)
+and `DAILY_SUMMARY` / `WEEKLY_SUMMARY` (the digests' starting state, then
+toggled live at `/summary`).
 
 Seasons are just a date filter — every query uses `play_date >= SEASON_START`.
 To start a new season, bump `SEASON_START`; nothing gets deleted. If you want an
 arbitrary range, the API takes one:
 `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`.
 
+## How the bot reads messages
+
+The bot only records messages from the configured group. A message counts as a
+result when it has a `Final score: N` line, with the five round scores on the
+last line of numbers before it. Emojis, reactions, and shouts are ignored, so a
+normal post just works:
+
+```
+www.maptap.gg July 20
+88🎉 96🔥 97🔥 97😱 7😱
+Final score: 690
+```
+
+- **Which day it counts for** — the header date (`July 20`) wins, not the clock,
+  so a score posted at 00:10 still lands on the right day. Month names resolve in
+  English and German; an unknown word falls back to the server date.
+- **Who posted it** — live posts are keyed by WhatsApp ID, so a display-name
+  change never splits someone's history. [`src/users.js`](src/users.js) maps each
+  person's IDs to one canonical name; a new phone shows up as
+  "(user not registered yet)" until it's added there.
+- **Fixing a score** — post again for the same day and the new result replaces
+  the old one (`UNIQUE(play_date, player_id)`; logged as "replaced").
+- **When nothing shows up** — malformed results land in the `parse_failures`
+  table and the log. First place to look.
+
 ## Endpoints
 
-- `GET /` — the scoreboard page, auto-refreshes every 5 min
-- `GET /api/standings` — leaderboard + badges as JSON
+Public:
+
+- `GET /` — the scoreboard page (Leaderboard ⟷ Daily winners toggle), auto-refreshes every 5 min
+- `GET /api/standings` — leaderboard, badges, and per-day `history` as JSON
 - `GET /healthz` — `{ whatsappConnected, lastMessageAt }`
 
-There's no auth. Put it behind whatever reverse proxy you already run.
+Admin — HTTP Basic Auth, any username, password is `ADMIN_TOKEN` (unset ⇒ locked):
+
+- `GET /summary` — toggle the daily/weekly digests and post one on demand
+- `GET` / `POST /api/settings` — read/write those toggles (persisted to `data/settings.json`)
+- `GET /admin/summary?kind=daily|weekly[&send=1]` — preview, or post a digest now
+
+The public pages carry no auth of their own — keep the site behind your own
+TLS/reverse proxy (Basic Auth assumes HTTPS in transit).
 
 ## Scripts
 
@@ -89,3 +126,30 @@ A few things worth knowing:
   happens — delete `data/auth/` and restart.
 - **Missing results?** Parse failures (usually format drift) land in the
   `parse_failures` table and the log. That's the first place to look.
+
+## Read this, Fernando
+
+Hey Fernando 👋 — here's the whole thing in plain words, no tech needed.
+
+You already play [maptap.gg](https://www.maptap.gg) every day and paste your
+result into the group. That's the entire job. A little bot lives in the chat and
+quietly writes down every score it sees — no command, no tagging anyone. Post
+like you always do and you're on the board.
+
+See the standings here: **https://maptap.andreweigel.me**
+
+- There are **two views**, flipped with the little spinning 🌍 switch at the top:
+  **Leaderboard** (wins, averages, streaks, the all-time record) and
+  **Daily winners** (who took each day).
+- Your name shows as just **Fernando**, even though WhatsApp calls you "Fer" —
+  the bot knows both are you, so all your games count as one player. If you ever
+  switch phones you might briefly show up twice; just tell André and it gets
+  stitched back together.
+- **Messed up a score?** Post that day's result again — the newer one quietly
+  replaces the old one. No harm done.
+- The **🔥 badge** is for monster rounds, **😱** for the painful ones. "Most
+  consistent 📅" goes to whoever plays the most days — and so far that's *you*,
+  more days than anyone. Keep it up.
+
+No app to install, no login, nothing to remember. Play, paste, glance at the
+site. That's the game. 🌍
