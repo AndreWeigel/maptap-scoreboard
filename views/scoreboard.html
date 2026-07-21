@@ -73,6 +73,16 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
   .dot.on { background: #4ade80; box-shadow: 0 0 9px #4ade80; }
 
+  /* ---- View toggle (Leaderboard <-> Daily winners), knob is a spinning earth ---- */
+  .viewtoggle { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 4px 0 24px; }
+  .vt-label { background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: 1.15rem; letter-spacing: .06em; color: var(--muted); padding: 4px 2px; transition: color .18s, text-shadow .18s; }
+  .vt-label.active { color: var(--cyan); text-shadow: 0 0 12px rgba(34,211,238,.55); }
+  .switch { position: relative; width: 62px; height: 30px; flex: none; padding: 0; cursor: pointer; border-radius: 999px; border: 1px solid var(--border); background: rgba(10,14,34,.72); transition: border-color .18s; }
+  .switch:hover { border-color: rgba(34,211,238,.4); }
+  .switch .knob { position: absolute; top: 50%; left: 3px; transform: translateY(-50%); width: 24px; height: 24px; display: grid; place-items: center; font-size: 17px; border-radius: 50%; background: rgba(20,26,60,.9); box-shadow: 0 0 10px rgba(34,211,238,.4); transition: left .28s cubic-bezier(.4,1.3,.5,1); animation: spin 8s linear infinite; }
+  .switch.on .knob { left: 35px; }
+  @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
   /* ---- Badges ---- */
   .badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 14px; margin: 6px 0 26px; }
   .badge { position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 15px 18px; transition: transform .2s ease, border-color .2s ease; }
@@ -150,7 +160,15 @@
 
   <div class="badges" id="badges"></div>
 
-  <section class="panel">
+  <div class="viewtoggle">
+    <button class="vt-label active" data-view="leaderboard" onclick="setView('leaderboard')">Leaderboard</button>
+    <button class="switch" role="switch" aria-checked="false" aria-label="Toggle view" onclick="toggleView()">
+      <span class="knob">🌍</span>
+    </button>
+    <button class="vt-label" data-view="history" onclick="setView('history')">Daily winners</button>
+  </div>
+
+  <section class="panel" id="view-leaderboard">
     <div class="panel-head">
       <h2>Leaderboard</h2>
       <span id="count"></span>
@@ -168,7 +186,7 @@
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel" id="view-history" hidden>
     <div class="panel-head">
       <h2>Daily winners</h2>
       <span id="daycount"></span>
@@ -200,6 +218,18 @@ const medal = (i) => i < 3 ? `m${i + 1}` : '';
 const fp = (n, cls) => `<span class="pill ${n > 0 ? cls : 'zero'}">${n}</span>`;
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtDate = (s) => { const [y,m,d] = s.split('-').map(Number); const dt = new Date(y, m-1, d); return `${WD[dt.getDay()]} ${d} ${MO[m-1]}`; };
+
+let view = 'leaderboard';
+function setView(v) {
+  view = v;
+  document.getElementById('view-leaderboard').hidden = v !== 'leaderboard';
+  document.getElementById('view-history').hidden = v !== 'history';
+  const sw = document.querySelector('.switch');
+  sw.classList.toggle('on', v === 'history');
+  sw.setAttribute('aria-checked', v === 'history');
+  document.querySelectorAll('.vt-label').forEach((el) => el.classList.toggle('active', el.dataset.view === v));
+}
+function toggleView() { setView(view === 'leaderboard' ? 'history' : 'leaderboard'); }
 
 async function load() {
  try {
