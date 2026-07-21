@@ -62,11 +62,12 @@
   /* ---- Hero ---- */
   .hero { text-align: center; padding: 26px 0 30px; }
   .kicker, .meta { text-shadow: 0 2px 14px rgba(7, 11, 28, .8); }  /* hero text sits over the bare globe */
-  .kicker { font-family: var(--display); font-weight: 600; font-size: .74rem; letter-spacing: .34em; text-transform: uppercase; color: var(--cyan); margin: 0 0 8px; opacity: .9; }
-  .wordmark { font-family: var(--display); font-weight: 700; font-size: clamp(2.4rem, 8vw, 4rem); line-height: 1; margin: 0; letter-spacing: .5px; }
-  .wordmark .map { color: var(--text); }
-  .wordmark .tap { background: linear-gradient(96deg, var(--cyan), var(--teal)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .wordmark .sub { font-weight: 500; color: var(--text); }
+  .kicker { display: inline-block; font-family: var(--mono); font-size: 1.16rem; letter-spacing: .28em; text-transform: uppercase; color: var(--cyan); text-decoration: none; margin: 0 0 16px; text-shadow: 0 2px 12px rgba(7,11,28,.85), 0 0 10px rgba(34,211,238,.45); transition: color .15s, text-shadow .15s; }
+  .kicker:hover { color: #8af3ff; text-shadow: 0 2px 12px rgba(7,11,28,.85), 0 0 18px rgba(34,211,238,.95); }
+  .wordmark { font-family: var(--pixel); font-size: clamp(1.5rem, 6.6vw, 2.7rem); line-height: 1.12; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
+  .wordmark .map { color: var(--cyan); text-shadow: 3px 3px 0 rgba(9,12,34,.95), 0 0 20px rgba(34,211,238,.5); }
+  .wordmark .tap { color: var(--pink); text-shadow: 3px 3px 0 rgba(9,12,34,.95), 0 0 20px rgba(244,114,182,.5); }
+  .wordmark .sub { display: block; font-family: var(--mono); font-size: clamp(1.2rem, 4vw, 1.8rem); letter-spacing: .38em; color: var(--muted); margin-top: 14px; text-shadow: 0 2px 10px rgba(7,11,28,.7); }
   .meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 14px; color: var(--muted); font-size: .84rem; }
   .status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 14, 34, .72); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
@@ -138,7 +139,7 @@
 
 <div class="wrap">
   <header class="hero">
-    <p class="kicker">Daily maptap.gg</p>
+    <a class="kicker" href="https://www.maptap.gg" target="_blank" rel="noopener">▶ PLAY MAPTAP.GG</a>
     <h1 class="wordmark"><span class="map">Map</span><span class="tap">Tap</span> <span class="sub">Scoreboard</span></h1>
     <div class="meta">
       <span id="season"></span>
