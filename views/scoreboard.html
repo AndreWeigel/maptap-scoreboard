@@ -191,10 +191,11 @@ async function load() {
   document.getElementById('updated').textContent = 'Updated ' + new Date(s.updatedAt).toLocaleTimeString();
 
   const b = s.badges;
+  const mostConsistent = [...s.leaderboard].sort((a, b) => b.participationPct - a.participationPct)[0];
   document.getElementById('badges').innerHTML = [
     b.record && badge('All-time record', b.record.score, `${b.record.name} · ${b.record.date}`),
     b.mostFire && badge('Most 🔥 rounds', b.mostFire.count, b.mostFire.name),
-    b.mostPanic && badge('Most 😱 rounds', b.mostPanic.count, b.mostPanic.name),
+    mostConsistent && badge('Most consistent 📅', mostConsistent.participationPct + '%', mostConsistent.name),
     b.currentWinStreak && badge('Win streak', b.currentWinStreak.length, b.currentWinStreak.name),
     b.longestParticipationStreak && badge('Longest run', b.longestParticipationStreak.length + ' days', b.longestParticipationStreak.name),
   ].filter(Boolean).join('');
