@@ -14,6 +14,21 @@ function rankDay(rows) {
   });
 }
 
+// Per-day results, newest day first: [{ date, ranked: [{name, score, rank}] }].
+function dailyHistory(rows) {
+  const byDate = new Map();
+  for (const r of rows) {
+    if (!byDate.has(r.play_date)) byDate.set(r.play_date, []);
+    byDate.get(r.play_date).push(r);
+  }
+  return [...byDate.keys()].sort().reverse().map((date) => ({
+    date,
+    ranked: rankDay(byDate.get(date)).map((r) => ({
+      name: r.player_name, score: r.final_score, rank: r.rank,
+    })),
+  }));
+}
+
 function computeStandings(rows, cfg) {
   const byDate = new Map();
   for (const r of rows) {
@@ -117,4 +132,4 @@ function computeStandings(rows, cfg) {
   };
 }
 
-module.exports = { rankDay, computeStandings };
+module.exports = { rankDay, computeStandings, dailyHistory };

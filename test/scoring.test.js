@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { rankDay, computeStandings } = require('../src/scoring');
+const { rankDay, computeStandings, dailyHistory } = require('../src/scoring');
 
 const CFG = { FIRE_THRESHOLD: 95, PANIC_THRESHOLD: 40 };
 
@@ -86,4 +86,15 @@ test('leaderboard ranked by wins', () => {
   ], CFG);
   assert.deepEqual(s.leaderboard.map((p) => p.playerId), ['alice', 'bob']);
   assert.deepEqual(s.leaderboard[0].podiums, [2, 1, 0]);
+});
+
+test('dailyHistory: newest day first, winners flagged, ties share rank 1', () => {
+  const h = dailyHistory([
+    row('2026-07-19', 'a', 500), row('2026-07-19', 'b', 400),
+    row('2026-07-20', 'x', 700), row('2026-07-20', 'y', 700), row('2026-07-20', 'z', 300),
+  ]);
+  assert.deepEqual(h.map((d) => d.date), ['2026-07-20', '2026-07-19']);
+  assert.deepEqual(h[0].ranked.filter((r) => r.rank === 1).map((r) => r.name), ['x', 'y']);
+  assert.equal(h[1].ranked[0].name, 'a');
+  assert.equal(h[1].ranked[0].score, 500);
 });

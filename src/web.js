@@ -1,7 +1,7 @@
 const path = require('node:path');
 const express = require('express');
 const config = require('../config');
-const { computeStandings } = require('./scoring');
+const { computeStandings, dailyHistory } = require('./scoring');
 const { toDateStr } = require('./parser');
 const { dailySummary, weeklySummary } = require('./summary');
 const { priorWeek } = require('./cron');
@@ -31,6 +31,7 @@ function createApp(db, status) {
       range: { from, to },
       seasonStart: config.SEASON_START,
       ...computeStandings(rows, config),
+      history: dailyHistory(rows),
       updatedAt: new Date().toISOString(),
     });
   });

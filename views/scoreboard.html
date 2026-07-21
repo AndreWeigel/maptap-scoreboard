@@ -104,6 +104,7 @@
   .rank.m3 { color: var(--bronze); background: rgba(240,168,120,.16); box-shadow: inset 0 0 0 1px rgba(240,168,120,.5), 0 0 10px -2px rgba(240,168,120,.5); }
   .player { font-family: var(--mono); font-size: 1.42rem; letter-spacing: .5px; color: #f4f7ff; }
   .wins { font-family: var(--pixel); font-size: .82rem; color: var(--cyan); text-shadow: 0 0 10px rgba(34,211,238,.55); }
+  .field { color: var(--muted); font-size: .85rem; }
   tr.leader td { background: linear-gradient(90deg, rgba(255,209,92,.16), rgba(255,209,92,.02) 72%) !important; }
   tr.leader .player { color: var(--gold); text-shadow: 0 0 14px rgba(255,209,92,.7); }
   tr.leader .player::after { content: "1ST"; font-family: var(--pixel); font-size: .5rem; margin-left: 10px; color: var(--pink); vertical-align: middle; text-shadow: 0 0 10px rgba(244,114,182,.75); animation: blink 1.2s steps(1) infinite; }
@@ -167,6 +168,21 @@
     </div>
   </section>
 
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Daily winners</h2>
+      <span id="daycount"></span>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>🥇 Winner</th><th>Score</th><th>Field</th>
+        </tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+  </section>
+
   <footer>
     <span id="updated"></span>
     <button onclick="load()">↻ Reload</button>
@@ -182,6 +198,8 @@ function badge(label, value, who) {
 }
 const medal = (i) => i < 3 ? `m${i + 1}` : '';
 const fp = (n, cls) => `<span class="pill ${n > 0 ? cls : 'zero'}">${n}</span>`;
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate = (s) => { const [y,m,d] = s.split('-').map(Number); const dt = new Date(y, m-1, d); return `${WD[dt.getDay()]} ${d} ${MO[m-1]}`; };
 
 async function load() {
  try {
@@ -210,6 +228,19 @@ async function load() {
       <td>${p.played}</td><td>${p.participationPct}%</td>
       <td>${fp(p.fireRounds, 'fire')}</td><td>${fp(p.panicRounds, 'panic')}</td>
     </tr>`).join('') || '<tr><td colspan="10" class="empty">No results yet — post a maptap.gg score in the group.</td></tr>';
+
+  const hist = s.history || [];
+  document.getElementById('daycount').textContent = `${hist.length} day${hist.length === 1 ? '' : 's'}`;
+  document.getElementById('history').innerHTML = hist.map((d) => {
+    const winners = d.ranked.filter((r) => r.rank === 1);
+    const field = d.ranked.filter((r) => r.rank !== 1).map((r) => `${esc(r.name)} ${r.score}`).join(' · ');
+    return `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td class="player">${winners.map((w) => esc(w.name)).join(', ')}</td>
+      <td class="wins">${winners[0].score}</td>
+      <td class="field">${field || '—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="empty">No games yet.</td></tr>';
 
   const h = await (await fetch('/healthz')).json();
   document.getElementById('wadot').className = 'dot' + (h.whatsappConnected ? ' on' : '');
