@@ -25,14 +25,6 @@ CREATE TABLE IF NOT EXISTS players (
   first_seen   TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS daily_results (
-  play_date    TEXT NOT NULL,
-  player_id    TEXT NOT NULL,
-  rank         INTEGER NOT NULL,
-  is_winner    INTEGER NOT NULL,
-  PRIMARY KEY (play_date, player_id)
-);
-
 CREATE TABLE IF NOT EXISTS parse_failures (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id  TEXT,
@@ -60,10 +52,6 @@ function openDb(dbPath) {
       created_at = excluded.created_at
   `);
   const hasResult = db.prepare('SELECT 1 FROM results WHERE play_date = ? AND player_id = ?');
-  const insertDaily = db.prepare(
-    'INSERT INTO daily_results (play_date, player_id, rank, is_winner) VALUES (?, ?, ?, ?)'
-  );
-  const deleteDaily = db.prepare('DELETE FROM daily_results WHERE play_date = ?');
 
   return {
     raw: db,
@@ -97,13 +85,6 @@ function openDb(dbPath) {
     getDates() {
       return db.prepare('SELECT DISTINCT play_date FROM results ORDER BY play_date')
         .all().map((r) => r.play_date);
-    },
-
-    replaceDailyResults(playDate, ranked) {
-      db.transaction(() => {
-        deleteDaily.run(playDate);
-        for (const r of ranked) insertDaily.run(playDate, r.player_id, r.rank, r.is_winner);
-      })();
     },
   };
 }

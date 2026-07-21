@@ -14,7 +14,6 @@ test('highest final score wins', () => {
   const ranked = rankDay([row('d', 'alice', 700), row('d', 'bob', 650)]);
   assert.equal(ranked[0].player_id, 'alice');
   assert.equal(ranked[0].rank, 1);
-  assert.equal(ranked[0].is_winner, 1);
   assert.equal(ranked[1].rank, 2);
 });
 

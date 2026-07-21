@@ -47,19 +47,17 @@ There's no auth. Put it behind whatever reverse proxy you already run.
 ## Scripts
 
 ```sh
-node scripts/backfill.js export.txt   # ingest an exported WhatsApp chat (.txt)
-node scripts/recompute.js             # rebuild daily_results cache from results
-node scripts/score-day.js 2026-07-20  # (re)score one date
+node scripts/backfill.js export.txt        # ingest an exported WhatsApp chat (.txt)
+node scripts/delete-player.js "Alice"      # remove a player by display name
 ```
+
+Standings are always computed from the `results` table directly, so there's no
+cache to rebuild after edits.
 
 One gotcha with backfills: chat exports have display names, not WhatsApp IDs, so
 those rows use the name as `player_id`. When that same person later posts live
-(and shows up under a real JID), merge them once:
-
-```sh
-sqlite3 data/scores.db "UPDATE results SET player_id='4917...@s.whatsapp.net' WHERE player_id='Alice';"
-node scripts/recompute.js
-```
+(under a real JID), add both ids under one entry in [`src/users.js`](src/users.js);
+the scoreboard collapses them to one canonical name at read time.
 
 ## Running in production (Docker)
 

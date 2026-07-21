@@ -35,14 +35,13 @@ function resolveDate(text, now) {
     const month = MONTHS[norm(m[1])];
     const day = Number(m[2]);
     if (month && day >= 1 && day <= 31) {
-      let year = now.getFullYear();
-      let date = `${year}-${pad(month)}-${pad(day)}`;
-      if (date > toDateStr(now)) date = `${year - 1}-${pad(month)}-${pad(day)}`;
-      return { date, fromHeader: true };
+      const year = now.getFullYear();
+      const date = `${year}-${pad(month)}-${pad(day)}`;
+      return date > toDateStr(now) ? `${year - 1}-${pad(month)}-${pad(day)}` : date;
     }
     console.log(`[parser] unknown month word "${m[1]}" — falling back to server date (extend MONTHS)`);
   }
-  return { date: toDateStr(now), fromHeader: false };
+  return toDateStr(now);
 }
 
 function parseResult(text, now = new Date()) {
@@ -59,13 +58,11 @@ function parseResult(text, now = new Date()) {
   }
   if (!rounds) return { ok: false, reason: 'no line with exactly five round scores' };
 
-  const { date, fromHeader } = resolveDate(text, now);
   return {
     ok: true,
     rounds,
     finalScore: Number(finalMatch[1]),
-    playDate: date,
-    dateFromHeader: fromHeader,
+    playDate: resolveDate(text, now),
   };
 }
 

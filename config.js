@@ -13,7 +13,6 @@ module.exports = {
   PORT: Number(process.env.PORT) || 3000,
   FIRE_THRESHOLD: 95,           // round >= this = 🔥 round
   PANIC_THRESHOLD: 40,          // round <= this = 😱 round
-  ROUNDS_PER_GAME: 5,
   DB_PATH: 'data/scores.db',
   AUTH_DIR: 'data/auth',
 };

@@ -1,18 +1,8 @@
 const cron = require('node-cron');
 const config = require('../config');
-const { rankDay } = require('./scoring');
 const { toDateStr } = require('./parser');
 const { dailySummary, weeklySummary } = require('./summary');
 const { resolveRows } = require('./users');
-
-// Cache today's ranks into daily_results. Convenience only — standings are
-// always computed from `results` directly, so a missed run loses nothing.
-function scoreDay(db, playDate) {
-  const rows = db.getResults(playDate, playDate);
-  db.replaceDailyResults(playDate, rankDay(rows));
-  console.log(`[cron] scored ${playDate}: ${rows.length} result(s)`);
-  return rows.length;
-}
 
 function send(status, text) {
   if (!text) return;
@@ -32,11 +22,12 @@ function priorWeek(now) {
 }
 
 function startCron(db, status) {
-  cron.schedule(config.CRON_TIME, () => {
-    const playDate = toDateStr(new Date());
-    scoreDay(db, playDate);
-    if (config.DAILY_SUMMARY) send(status, dailySummary(resolveRows(db.getResults(playDate, playDate)), playDate));
-  }, { timezone: config.TZ });
+  if (config.DAILY_SUMMARY) {
+    cron.schedule(config.CRON_TIME, () => {
+      const playDate = toDateStr(new Date());
+      send(status, dailySummary(resolveRows(db.getResults(playDate, playDate)), playDate));
+    }, { timezone: config.TZ });
+  }
 
   if (config.WEEKLY_SUMMARY) {
     cron.schedule(config.WEEKLY_CRON, () => {
@@ -46,4 +37,4 @@ function startCron(db, status) {
   }
 }
 
-module.exports = { scoreDay, startCron, priorWeek };
+module.exports = { startCron, priorWeek };

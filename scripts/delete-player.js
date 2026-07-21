@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// Delete players by display name and rebuild standings.
+// Delete players by display name. Standings recompute from `results` directly.
 // Usage: node scripts/delete-player.js "Yanina Isla" "Brandi" "Benoît Payet"
 const config = require('../config');
 process.env.TZ = config.TZ;
 const { openDb } = require('../src/db');
-const { scoreDay } = require('../src/cron');
 
 function deletePlayers(db, names) {
   const raw = db.raw;
@@ -36,7 +35,5 @@ if (require.main === module) {
   }
   const db = openDb(config.DB_PATH);
   const deleted = deletePlayers(db, names);
-  // daily_results is derived — rebuild it for every remaining date.
-  for (const date of db.getDates()) scoreDay(db, date);
   console.log(`Deleted ${deleted.length} player(s): ${deleted.join(', ')}`);
 }

@@ -1,5 +1,4 @@
-// Pure functions over `results` rows. Everything here is recomputable from
-// the results table alone — daily_results is only a cache.
+// Pure functions over `results` rows — the standings are always derived, never stored.
 
 // Competition ranking per spec acceptance tests: tie at top -> both rank 1, next ranks 3.
 function rankDay(rows) {
@@ -11,7 +10,7 @@ function rankDay(rows) {
       rank = i + 1;
       prevScore = r.final_score;
     }
-    return { ...r, rank, is_winner: rank === 1 ? 1 : 0 };
+    return { ...r, rank };
   });
 }
 
@@ -112,7 +111,6 @@ function computeStandings(rows, cfg) {
     badges: {
       record,
       mostFire: maxBy('fire'),
-      mostPanic: maxBy('panic'),
       currentWinStreak,
       longestParticipationStreak,
     },
