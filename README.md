@@ -76,6 +76,7 @@ Public:
 
 Admin (HTTP Basic Auth, any username, password is `ADMIN_TOKEN`; unset means locked):
 
+- `GET /admin` — hub linking to the two pages below
 - `GET /summary` — toggle the digests, or send one now
 - `GET /users` — manage the player registry: drag ids onto players, create players, switch them on/off
 - `GET` / `POST /api/settings` — read/write the digest toggles (`data/settings.json`)

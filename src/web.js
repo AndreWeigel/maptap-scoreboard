@@ -43,7 +43,11 @@ function createApp(db, status) {
     res.sendFile(path.join(__dirname, '..', 'views', 'scoreboard.html'));
   });
 
-  // ---- Admin: digest toggles (Basic Auth). ----
+  // ---- Admin (Basic Auth). ----
+  app.get('/admin', basicAuth, (_req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'views', 'admin.html'));
+  });
+
   app.get('/summary', basicAuth, (_req, res) => {
     res.sendFile(path.join(__dirname, '..', 'views', 'summary.html'));
   });
