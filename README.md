@@ -55,8 +55,10 @@ Day: taken from the header date (`July 20`), not the clock, so a score posted at
 unknown word falls back to the server date.
 
 Player: keyed by WhatsApp ID, so renaming yourself doesn't split your history.
-[`src/users.js`](src/users.js) maps each person's IDs to one name. A new phone
-shows as `Name (user not registered yet)` until you add it there.
+the registry maps each person's IDs to one name. A new phone shows as
+`Name (user not registered yet)` until you claim it on the `/users` admin page
+(drag its id onto the player). The registry lives in `data/users.json`, seeded
+from the `SEED` list in [`src/users.js`](src/users.js).
 
 Corrections: post again for the same day and the new result replaces the old one
 (`UNIQUE(play_date, player_id)`).
@@ -75,7 +77,9 @@ Public:
 Admin (HTTP Basic Auth, any username, password is `ADMIN_TOKEN`; unset means locked):
 
 - `GET /summary` — toggle the digests, or send one now
-- `GET` / `POST /api/settings` — read/write the toggles (`data/settings.json`)
+- `GET /users` — manage the player registry: drag ids onto players, create players, switch them on/off
+- `GET` / `POST /api/settings` — read/write the digest toggles (`data/settings.json`)
+- `GET` / `POST /api/users` — read/write the registry (`data/users.json`)
 - `GET /admin/summary?kind=daily|weekly[&send=1]` — preview or post a digest
 
 The public pages have no auth. Keep the site behind your own TLS/proxy; Basic
@@ -92,8 +96,8 @@ Standings are computed from `results` on read, so there's no cache to rebuild
 after edits.
 
 Backfill note: chat exports have display names, not WhatsApp IDs, so those rows
-use the name as `player_id`. When that person later posts live, add both IDs
-under one entry in [`src/users.js`](src/users.js).
+use the name as `player_id`. When that person later posts live, open `/users`
+and drag both ids onto one player.
 
 ## Running in production (Docker)
 

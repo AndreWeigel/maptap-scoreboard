@@ -1,23 +1,47 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveRows, NAME_BY_ID } = require('../src/users');
+const fs = require('node:fs');
+const users = require('../src/users');
 
+const DENNIS_ID = '~' + String.fromCharCode(0x202F) + 'dela nesto';
 const row = (id, name) => ({ play_date: '2026-07-21', player_id: id, player_name: name, final_score: 1 });
 
-test('known ids collapse onto the canonical name, across both id forms', () => {
-  const out = resolveRows([row('59777438757039@lid', 'dan'), row('Daniel Couvinha', 'Daniel Couvinha')]);
-  assert.deepEqual(out.map((r) => r.player_id), ['Daniel', 'Daniel']);
-  assert.deepEqual(out.map((r) => r.player_name), ['Daniel', 'Daniel']);
+test('resolveRows: known ids collapse to canonical name, unknown tagged', () => {
+  try {
+    users.save({ users: [
+      { name: 'Daniel', ids: ['59777438757039@lid', 'Daniel Couvinha'] },
+      { name: 'Dennis', ids: [DENNIS_ID] },
+    ] });
+    const out = users.resolveRows([
+      row('59777438757039@lid', 'dan'),
+      row('Daniel Couvinha', 'Daniel Couvinha'),
+      row(DENNIS_ID, 'whatever'),
+      row('99999@lid', 'Newbie'),
+    ]);
+    assert.deepEqual(out.map((r) => r.player_id), ['Daniel', 'Daniel', 'Dennis', '99999@lid']);
+    assert.equal(out[3].player_name, 'Newbie (user not registered yet)');
+  } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
-test('the U+202F "~ dela nesto" id resolves to Dennis', () => {
-  const dennisId = '~' + String.fromCharCode(0x202F) + 'dela nesto';
-  assert.equal(NAME_BY_ID.get(dennisId), 'Dennis');
-  assert.equal(resolveRows([row(dennisId, 'whatever')])[0].player_name, 'Dennis');
+test('resolveRows: rows of inactive users are dropped entirely', () => {
+  try {
+    users.save({ users: [
+      { name: 'Gone', ids: ['g@lid'], active: false },
+      { name: 'Here', ids: ['h@lid'], active: true },
+    ] });
+    const out = users.resolveRows([row('g@lid', 'Gone'), row('h@lid', 'Here')]);
+    assert.deepEqual(out.map((r) => r.player_id), ['Here']);
+  } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
-test('unknown ids are kept but tagged, and never collide with a known name', () => {
-  const [out] = resolveRows([row('99999@lid', 'Newbie')]);
-  assert.equal(out.player_id, '99999@lid');
-  assert.equal(out.player_name, 'Newbie (user not registered yet)');
+test('save normalizes: drops nameless, dedups ids, defaults active true', () => {
+  try {
+    const saved = users.save({ users: [
+      { name: '  Bob ', ids: ['a', 'a', 'b'] },
+      { name: '', ids: ['x'] },
+      { ids: ['y'] },
+    ] });
+    assert.equal(saved.users.length, 1);
+    assert.deepEqual(saved.users[0], { name: 'Bob', ids: ['a', 'b'], active: true });
+  } finally { fs.rmSync(users.FILE, { force: true }); }
 });

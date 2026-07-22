@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Players</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070b1c; --bg-2: #0a1030; --panel: rgba(16,22,52,.9); --border: rgba(130,155,255,.16);
+    --text: #eaf0ff; --muted: #98a4d4; --cyan: #22d3ee; --green: #4ade80; --red: #f0616a; --gold: #ffd15c;
+    --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 40px 20px 80px; color: var(--text);
+    font: 15px/1.5 var(--body); background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  a.back { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: .95rem; }
+  a.back:hover { color: var(--cyan); }
+  h1 { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 10px 0 4px; }
+  p.hint { color: var(--muted); font-size: .9rem; margin: 0 0 18px; }
+  .bar { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; position: sticky; top: 0;
+    background: linear-gradient(var(--bg-2), rgba(10,16,48,.6)); padding: 10px 0; z-index: 5; }
+  button { font-family: var(--mono); cursor: pointer; border-radius: 999px; border: 1px solid var(--border);
+    background: rgba(10,14,34,.72); color: var(--text); padding: 8px 16px; font-size: .9rem; transition: background .15s, border-color .15s; }
+  button:hover { border-color: rgba(34,211,238,.4); }
+  button.primary { background: rgba(34,211,238,.15); border-color: rgba(34,211,238,.45); color: var(--cyan); }
+  button.primary:disabled { opacity: .45; cursor: default; }
+  #status { font-family: var(--mono); font-size: .85rem; color: var(--muted); margin-left: auto; }
+  h2 { font-family: var(--mono); font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
+
+  .pool { display: flex; flex-wrap: wrap; gap: 8px; min-height: 54px; padding: 12px; border: 1px dashed var(--border); border-radius: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; }
+  .card.off { opacity: .5; }
+  .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .card-head .name { font-weight: 700; font-size: 1.05rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .zone { display: flex; flex-wrap: wrap; gap: 7px; min-height: 40px; padding: 8px; border-radius: 10px; border: 1px dashed transparent; flex: 1; align-content: flex-start; }
+  .dropzone.over { border-color: var(--cyan); background: rgba(34,211,238,.08); }
+  .empty { color: var(--muted); font-size: .82rem; font-style: italic; align-self: center; }
+
+  .chip { display: inline-flex; flex-direction: column; gap: 1px; cursor: grab; user-select: none;
+    background: rgba(20,26,60,.9); border: 1px solid var(--border); border-radius: 9px; padding: 5px 9px; max-width: 100%; }
+  .chip:active { cursor: grabbing; }
+  .chip .who { font-size: .85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .meta { font-family: var(--mono); font-size: .68rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip.dragging { opacity: .4; }
+
+  .sw { position: relative; width: 44px; height: 24px; flex: none; padding: 0; border-radius: 999px; border: 1px solid var(--border); background: rgba(10,14,34,.72); }
+  .sw[aria-checked="true"] { background: rgba(74,222,128,.25); border-color: rgba(74,222,128,.5); }
+  .sw::after { content: ""; position: absolute; top: 50%; left: 3px; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%; background: #cdd8ee; transition: left .18s, background .18s; }
+  .sw[aria-checked="true"]::after { left: 23px; background: var(--green); }
+  .del { border: 0; background: none; color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 2px 4px; }
+  .del:hover { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Scoreboard</a>
+  <h1>Players</h1>
+  <p class="hint">Drag an id chip onto a player to claim it. Toggle a player off when they
+    leave — their history stays, they just disappear from the board. Nothing is saved until you press Save.</p>
+
+  <div class="bar">
+    <button id="new">+ New player</button>
+    <button id="save" class="primary" disabled>Save</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="board"></div>
+</div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let state = { users: [], orphanIds: [], idInfo: {} };
+let dirty = false;
+
+function chipHTML(id) {
+  const info = state.idInfo[id];
+  const who = info ? info.name : id;
+  const meta = info ? `${info.days}d · last ${info.last}` : 'no results yet';
+  return `<span class="chip" draggable="true" data-id="${esc(id)}" title="${esc(id)}">
+    <span class="who">${esc(who)}</span><span class="meta">${esc(meta)}</span></span>`;
+}
+
+function render() {
+  const pool = state.orphanIds.length
+    ? state.orphanIds.map(chipHTML).join('')
+    : '<span class="empty">No unassigned ids</span>';
+  const cards = state.users.map((u, i) => `
+    <div class="card ${u.active ? '' : 'off'}">
+      <div class="card-head">
+        <span class="name" title="${esc(u.name)}">${esc(u.name)}</span>
+        <button class="sw" role="switch" aria-checked="${u.active}" data-toggle="${i}" title="on/off"></button>
+        <button class="del" data-del="${i}" title="Delete player (history kept)">✕</button>
+      </div>
+      <div class="zone dropzone" data-target="${i}">
+        ${u.ids.length ? u.ids.map(chipHTML).join('') : '<span class="empty">drop ids here</span>'}
+      </div>
+    </div>`).join('');
+  document.getElementById('board').innerHTML =
+    `<h2>Unassigned ids</h2><div class="pool dropzone" data-target="pool">${pool}</div>
+     <h2>Players (${state.users.length})</h2><div class="grid">${cards}</div>`;
+  document.getElementById('save').disabled = !dirty;
+  document.getElementById('status').textContent = dirty ? 'Unsaved changes' : '';
+}
+
+function moveId(id, target) {
+  for (const u of state.users) u.ids = u.ids.filter((x) => x !== id);
+  state.orphanIds = state.orphanIds.filter((x) => x !== id);
+  if (target === 'pool') state.orphanIds.push(id);
+  else state.users[+target].ids.push(id);
+  dirty = true;
+  render();
+}
+
+const board = document.getElementById('board');
+board.addEventListener('dragstart', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  e.dataTransfer.setData('text/plain', chip.dataset.id);
+  chip.classList.add('dragging');
+});
+board.addEventListener('dragend', (e) => { const c = e.target.closest('.chip'); if (c) c.classList.remove('dragging'); });
+board.addEventListener('dragover', (e) => {
+  const zone = e.target.closest('.dropzone');
+  if (zone) { e.preventDefault(); zone.classList.add('over'); }
+});
+board.addEventListener('dragleave', (e) => { const z = e.target.closest('.dropzone'); if (z) z.classList.remove('over'); });
+board.addEventListener('drop', (e) => {
+  const zone = e.target.closest('.dropzone');
+  if (!zone) return;
+  e.preventDefault();
+  const id = e.dataTransfer.getData('text/plain');
+  if (id) moveId(id, zone.dataset.target);
+});
+board.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-toggle]'), d = e.target.closest('[data-del]');
+  if (t) { const u = state.users[+t.dataset.toggle]; u.active = !u.active; dirty = true; render(); }
+  if (d) {
+    const u = state.users[+d.dataset.del];
+    if (!confirm(`Delete "${u.name}"? Their ids go back to Unassigned; their results stay in the database.`)) return;
+    state.orphanIds.push(...u.ids);
+    state.users.splice(+d.dataset.del, 1);
+    dirty = true; render();
+  }
+});
+
+document.getElementById('new').addEventListener('click', () => {
+  const name = (prompt('New player name?') || '').trim();
+  if (!name) return;
+  if (state.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return alert('That name already exists.');
+  state.users.push({ name, ids: [], active: true });
+  dirty = true; render();
+});
+
+document.getElementById('save').addEventListener('click', async () => {
+  document.getElementById('save').disabled = true;
+  document.getElementById('status').textContent = 'Saving…';
+  try {
+    await fetch('/api/users', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ users: state.users }) });
+    dirty = false;
+    await load();
+    document.getElementById('status').textContent = 'Saved ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('status').textContent = 'Save failed — try again';
+    document.getElementById('save').disabled = false;
+  }
+});
+
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+async function load() {
+  const d = await (await fetch('/api/users')).json();
+  state = { users: d.users, orphanIds: d.orphans.map((o) => o.id), idInfo: d.idInfo };
+  dirty = false;
+  render();
+}
+load().catch(() => { document.getElementById('board').textContent = 'Could not load players.'; });
+</script>
+</body>
+</html>

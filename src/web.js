@@ -6,7 +6,8 @@ const { computeStandings, dailyHistory } = require('./scoring');
 const { toDateStr } = require('./parser');
 const { dailySummary, weeklySummary } = require('./summary');
 const { priorWeek } = require('./cron');
-const { resolveRows } = require('./users');
+const users = require('./users');
+const { resolveRows } = users;
 const settings = require('./settings');
 
 // HTTP Basic Auth for admin routes. Any username; the password must equal
@@ -50,6 +51,30 @@ function createApp(db, status) {
   app.get('/api/settings', basicAuth, (_req, res) => res.json(settings.get()));
 
   app.post('/api/settings', basicAuth, (req, res) => res.json(settings.set(req.body || {})));
+
+  // ---- Admin: player registry (Basic Auth). ----
+  app.get('/users', basicAuth, (_req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'views', 'users.html'));
+  });
+
+  app.get('/api/users', basicAuth, (_req, res) => {
+    // Every distinct id seen in results, with its latest display name, day count,
+    // and last-played date — so the admin UI can label draggable id chips.
+    const info = db.raw.prepare(`
+      SELECT r.player_id AS id, r.player_name AS name, c.days, c.last
+      FROM results r
+      JOIN (SELECT player_id, COUNT(*) days, MAX(play_date) last FROM results GROUP BY player_id) c
+        ON c.player_id = r.player_id AND c.last = r.play_date
+    `).all();
+    const assigned = new Set(users.get().users.flatMap((u) => u.ids));
+    res.json({
+      users: users.get().users,
+      orphans: info.filter((x) => !assigned.has(x.id)),
+      idInfo: Object.fromEntries(info.map((x) => [x.id, x])),
+    });
+  });
+
+  app.post('/api/users', basicAuth, (req, res) => res.json(users.save(req.body || {})));
 
   app.get('/api/standings', (req, res) => {
     const from = req.query.from || config.SEASON_START;
