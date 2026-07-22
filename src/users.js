@@ -20,6 +20,7 @@ const USERS = [
   { name: 'Fernando',   ids: ['123287153688707@lid', 'Fernando Zu'] },
   { name: 'Afroze',     ids: ['63591352950909@lid', 'Afroze Ibrahim'] },
   { name: 'Brandi',     ids: ['118468150055005@lid', 'Brandi'] },
+  { name: 'Yanina',     ids: ['177158945300634@lid', 'Yanina Isla'] },
   { name: 'Dennis',     ids: ['251281373409410@lid', DENNIS_ID] },
 ];
 
