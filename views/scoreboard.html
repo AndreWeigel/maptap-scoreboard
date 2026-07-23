@@ -26,9 +26,12 @@
     --bronze: #f0a878;
     --fire: #ff9f45;
     --panic: #7dd3fc;
-    /* contribution-calendar shade ramp (empty -> busiest) */
-    --l0: rgba(130,155,255,.09); --l1: rgba(34,211,238,.28); --l2: rgba(34,211,238,.5);
-    --l3: rgba(34,211,238,.74); --l4: #22d3ee;
+    /* contribution-calendar shade ramp: green (quiet day) -> cyan (busiest) */
+    --l0: rgba(130,155,255,.09);
+    --l1: rgba(74,222,128,.55);   /* green */
+    --l2: rgba(52,211,190,.72);   /* teal */
+    --l3: rgba(34,211,238,.85);   /* cyan */
+    --l4: #22d3ee;                /* bright cyan */
     --display: "Fredoka", system-ui, sans-serif;
     --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: "VT323", ui-monospace, monospace;   /* retro terminal, for the arcade table */
@@ -87,19 +90,23 @@
   @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
 
   /* ---- Contribution calendar ---- */
-  #calendar { margin-bottom: 22px; }
+  #calendar { margin: 22px 0; }
   .cal-wrap { overflow-x: auto; padding-bottom: 6px; }
-  .cal { display: inline-grid; grid-template-columns: auto 1fr; gap: 4px 6px; }
+  .cal { display: inline-grid; grid-template-columns: auto 1fr; gap: 5px 7px; }
   .cal-months { grid-column: 2; position: relative; height: 16px; font-size: .72rem; color: var(--muted); font-family: var(--mono); }
   .cal-months span { position: absolute; top: 0; white-space: nowrap; }
-  .cal-days { display: grid; grid-template-rows: repeat(7, 13px); gap: 3px; font-size: .64rem; color: var(--muted); font-family: var(--mono); align-items: center; }
-  .cal-grid { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
-  .cal-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--l0); }
+  .cal-days { display: grid; grid-template-rows: repeat(7, 13px); gap: 5px; font-size: .64rem; color: var(--muted); font-family: var(--mono); align-items: center; }
+  .cal-grid { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 5px; }
+  .cal-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--l0); transition: outline-color .1s; outline: 1.5px solid transparent; outline-offset: 1px; }
   .cal-cell.l1 { background: var(--l1); } .cal-cell.l2 { background: var(--l2); }
   .cal-cell.l3 { background: var(--l3); } .cal-cell.l4 { background: var(--l4); }
   .cal-cell.today { box-shadow: 0 0 0 1.5px var(--cyan); }
+  .cal-cell:hover { outline-color: var(--text); }
   .cal-legend { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 12px; font-size: .72rem; color: var(--muted); font-family: var(--mono); }
   .cal-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+  .cal-tip { position: fixed; z-index: 50; pointer-events: none; display: none; max-width: 260px;
+    background: var(--panel-solid); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+    font-size: .82rem; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.6); white-space: nowrap; }
 
   /* ---- Badges ---- */
   .badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 14px; margin: 6px 0 26px; }
@@ -235,6 +242,7 @@
       <i style="background:var(--l0)"></i><i style="background:var(--l1)"></i><i style="background:var(--l2)"></i><i style="background:var(--l3)"></i><i style="background:var(--l4)"></i>
       More</div>
   </section>
+  <div class="cal-tip" id="cal-tip"></div>
 
   <footer>
     <span id="updated"></span>
@@ -296,8 +304,8 @@ function renderCalendar(hist, seasonStart) {
     cell.className = 'cal-cell' + (n ? ' l' + level(n) : '') + (key === todayStr ? ' today' : '');
     if (day) {
       const w = day.ranked.filter((r) => r.rank === 1);
-      cell.title = `${fmtDate(key)} · ${n} player${n===1?'':'s'} · 🥇 ${w.map((r)=>r.name).join(', ')} ${w[0].score}`;
-    } else cell.title = `${fmtDate(key)} · nobody played`;
+      cell.dataset.tip = `${fmtDate(key)} — ${n} player${n===1?'':'s'} · 🥇 ${w.map((r)=>r.name).join(', ')} ${w[0].score}`;
+    } else cell.dataset.tip = `${fmtDate(key)} — no one played`;
     grid.appendChild(cell);
     if (dt.getMonth() !== lastMonth) { lastMonth = dt.getMonth(); monthAtCol.set(col, MO[lastMonth]); }
     if (((dt.getDay() + 6) % 7) === 6) col++;    // Sunday ends this week column
@@ -305,11 +313,27 @@ function renderCalendar(hist, seasonStart) {
   for (const [c, name] of monthAtCol) {
     const lab = document.createElement('span');
     lab.textContent = name;
-    lab.style.left = (c * 16) + 'px';            // 13px cell + 3px gap
+    lab.style.left = (c * 18) + 'px';            // 13px cell + 5px gap
     months.appendChild(lab);
   }
   document.getElementById('calcount').textContent = `${hist.length} day${hist.length===1?'':'s'} played`;
 }
+
+// Custom hover tooltip for the calendar (grid element persists across reloads).
+(function () {
+  const grid = document.getElementById('cal-grid'), tip = document.getElementById('cal-tip');
+  grid.addEventListener('mouseover', (e) => {
+    const c = e.target.closest('.cal-cell');
+    if (!c) return;
+    tip.textContent = c.dataset.tip;
+    tip.style.display = 'block';
+  });
+  grid.addEventListener('mousemove', (e) => {
+    tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px';
+    tip.style.top = (e.clientY + 16) + 'px';
+  });
+  grid.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+})();
 
 async function load() {
  try {
