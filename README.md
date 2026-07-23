@@ -55,10 +55,10 @@ Day: taken from the header date (`July 20`), not the clock, so a score posted at
 unknown word falls back to the server date.
 
 Player: keyed by WhatsApp ID, so renaming yourself doesn't split your history.
-the registry maps each person's IDs to one name. A new phone shows as
-`Name (user not registered yet)` until you claim it on the `/users` admin page
-(drag its id onto the player). The registry lives in `data/users.json`, seeded
-from the `SEED` list in [`src/users.js`](src/users.js).
+The registry maps each person's IDs to one name. An unassigned id (a new phone,
+a new person) does not appear on the scoreboard at all — it waits in the `/users`
+admin pool until you claim it (drag its id onto a player). The registry lives in
+`data/users.json`, seeded from the `SEED` list in [`src/users.js`](src/users.js).
 
 Corrections: post again for the same day and the new result replaces the old one
 (`UNIQUE(play_date, player_id)`).
@@ -159,8 +159,8 @@ Identity: backfilled history keyed players by display name, live messages key by
 [`src/users.js`](src/users.js) maps each person's IDs to one name, applied on
 read via `resolveRows()`; the raw rows aren't touched. That's why you're
 "Fernando" and not "Fer": your `…@lid` and your old export name resolve to the
-same entry. An unknown ID shows as `Name (user not registered yet)` until it's
-added, which is what you were until your first live post.
+same entry. An unassigned id is hidden from the board and waits in the `/users`
+admin pool until it's claimed, which is where you were until your first live post.
 
 Standings ([scoring.js](src/scoring.js)): pure functions over the rows. `rankDay`
 handles ties (shared rank, next rank skips), `computeStandings` does

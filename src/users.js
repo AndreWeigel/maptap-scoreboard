@@ -10,7 +10,6 @@ const path = require('node:path');
 const config = require('../config');
 
 const FILE = path.join(path.dirname(config.DB_PATH), 'users.json');
-const UNREGISTERED_SUFFIX = ' (user not registered yet)';
 
 // WhatsApp renders non-contacts as "~" + U+202F (narrow no-break space) + name.
 const DENNIS_ID = '~' + String.fromCharCode(0x202F) + 'dela nesto';
@@ -70,22 +69,21 @@ function lookup() {
   return { nameById, activeByName };
 }
 
-// Resolve raw result rows to canonical identity for display/grouping. Known ids
-// collapse onto the person's name; rows of inactive users are dropped; unknown
-// ids stay distinct and get the "(user not registered yet)" tag.
+// Resolve raw result rows to canonical identity for display/grouping. Known,
+// active ids collapse onto the person's name. Everything else — unassigned ids
+// and inactive users — is dropped, so it never reaches the scoreboard or
+// digests. Unassigned ids still show up on the /users admin page (which reads
+// the results table directly), where they can be claimed.
 function resolveRows(rows) {
   const { nameById, activeByName } = lookup();
   const out = [];
   for (const r of rows) {
     const name = nameById.get(r.player_id);
-    if (name === undefined) {
-      out.push({ ...r, player_name: `${r.player_name}${UNREGISTERED_SUFFIX}` });
-    } else if (activeByName.get(name)) {
+    if (name !== undefined && activeByName.get(name)) {
       out.push({ ...r, player_id: name, player_name: name });
     }
-    // inactive user: skip
   }
   return out;
 }
 
-module.exports = { get, save, resolveRows, SEED, FILE, UNREGISTERED_SUFFIX };
+module.exports = { get, save, resolveRows, SEED, FILE };

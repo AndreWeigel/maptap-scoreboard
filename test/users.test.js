@@ -6,7 +6,7 @@ const users = require('../src/users');
 const DENNIS_ID = '~' + String.fromCharCode(0x202F) + 'dela nesto';
 const row = (id, name) => ({ play_date: '2026-07-21', player_id: id, player_name: name, final_score: 1 });
 
-test('resolveRows: known ids collapse to canonical name, unknown tagged', () => {
+test('resolveRows: known ids collapse to canonical name, unknown ids dropped', () => {
   try {
     users.save({ users: [
       { name: 'Daniel', ids: ['59777438757039@lid', 'Daniel Couvinha'] },
@@ -18,8 +18,8 @@ test('resolveRows: known ids collapse to canonical name, unknown tagged', () => 
       row(DENNIS_ID, 'whatever'),
       row('99999@lid', 'Newbie'),
     ]);
-    assert.deepEqual(out.map((r) => r.player_id), ['Daniel', 'Daniel', 'Dennis', '99999@lid']);
-    assert.equal(out[3].player_name, 'Newbie (user not registered yet)');
+    assert.deepEqual(out.map((r) => r.player_id), ['Daniel', 'Daniel', 'Dennis']);
+    assert.ok(!out.some((r) => r.player_id === '99999@lid'), 'unassigned id must not reach the board');
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
