@@ -76,11 +76,13 @@ Public:
 
 Admin (HTTP Basic Auth, any username, password is `ADMIN_TOKEN`; unset means locked):
 
-- `GET /admin` — hub linking to the two pages below
+- `GET /admin` — hub linking to the pages below
 - `GET /summary` — toggle the digests, or send one now
 - `GET /users` — manage the player registry: drag ids onto players, create players, switch them on/off
+- `GET /import` — upload a WhatsApp `.txt` export to backfill scores for new players
 - `GET` / `POST /api/settings` — read/write the digest toggles (`data/settings.json`)
 - `GET` / `POST /api/users` — read/write the registry (`data/users.json`)
+- `POST /api/import/preview` — list the senders in an export; `POST /api/import` — import chosen ones
 - `GET /admin/summary?kind=daily|weekly[&send=1]` — preview or post a digest
 
 The public pages have no auth. Keep the site behind your own TLS/proxy; Basic
@@ -92,6 +94,11 @@ Auth assumes HTTPS.
 node scripts/backfill.js export.txt        # ingest an exported WhatsApp chat (.txt)
 node scripts/delete-player.js "Alice"      # remove a player by display name
 ```
+
+`backfill.js` ingests *every* sender in the file. For a targeted import (new
+people only, existing players protected from overwrite) use the `/import` admin
+page instead — it lets you pick which senders to import and skips anyone already
+registered.
 
 Standings are computed from `results` on read, so there's no cache to rebuild
 after edits.

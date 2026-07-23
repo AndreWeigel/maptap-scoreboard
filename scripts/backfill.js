@@ -31,34 +31,27 @@ function matchStart(line) {
   return null;
 }
 
-function backfill(db, text) {
-  const counts = { ok: 0, replaced: 0, failure: 0, ignored: 0 };
+// Assemble an export into messages: each start line plus its continuation lines.
+function parseMessages(text) {
+  const msgs = [];
   let current = null;
-
-  const flush = () => {
-    if (!current) return;
-    // ponytail: export has no JIDs, so the sender name is the player_id; if the same
-    // player later posts live under a JID, merge with an UPDATE (see README)
-    const res = ingestMessage(db, {
-      playerId: current.sender,
-      playerName: current.sender,
-      text: current.text,
-      now: current.ts,
-    });
-    counts[res.kind === 'ok' && res.replaced ? 'replaced' : res.kind]++;
-    current = null;
-  };
-
   for (const line of text.split(/\r?\n/)) {
     const m = matchStart(line);
-    if (m) {
-      flush();
-      current = m;
-    } else if (current) {
-      current.text += '\n' + line;
-    }
+    if (m) { if (current) msgs.push(current); current = m; }
+    else if (current) current.text += '\n' + line;
   }
-  flush();
+  if (current) msgs.push(current);
+  return msgs;
+}
+
+function backfill(db, text) {
+  const counts = { ok: 0, replaced: 0, failure: 0, ignored: 0 };
+  for (const m of parseMessages(text)) {
+    // ponytail: export has no JIDs, so the sender name is the player_id; if the same
+    // player later posts live under a JID, merge them on the /users admin page.
+    const res = ingestMessage(db, { playerId: m.sender, playerName: m.sender, text: m.text, now: m.ts });
+    counts[res.kind === 'ok' && res.replaced ? 'replaced' : res.kind]++;
+  }
   return counts;
 }
 
@@ -72,4 +65,4 @@ if (require.main === module) {
   console.log(`Backfill done: ${c.ok} ingested, ${c.replaced} replaced, ${c.failure} parse failures, ${c.ignored} ignored.`);
 }
 
-module.exports = { matchStart, backfill };
+module.exports = { matchStart, parseMessages, backfill };

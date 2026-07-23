@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Import</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070b1c; --bg-2: #0a1030; --panel: rgba(16,22,52,.9); --border: rgba(130,155,255,.16);
+    --text: #eaf0ff; --muted: #98a4d4; --cyan: #22d3ee; --green: #4ade80;
+    --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 40px 20px 80px; color: var(--text);
+    font: 15px/1.5 var(--body); background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  a.back { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: .95rem; }
+  a.back:hover { color: var(--cyan); }
+  h1 { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 10px 0 4px; }
+  p.hint { color: var(--muted); font-size: .9rem; margin: 0 0 20px; }
+  button { font-family: var(--mono); cursor: pointer; border-radius: 999px; border: 1px solid var(--border);
+    background: rgba(10,14,34,.72); color: var(--text); padding: 9px 18px; font-size: .9rem; }
+  button.primary { background: rgba(34,211,238,.15); border-color: rgba(34,211,238,.45); color: var(--cyan); }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=file] { color: var(--muted); font-family: var(--mono); font-size: .85rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin: 16px 0; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .row.reg { opacity: .55; }
+  .row input { width: 18px; height: 18px; accent-color: var(--cyan); }
+  .row .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meta { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: 1px; }
+  .row .tag { margin-left: auto; font-family: var(--mono); font-size: .7rem; color: var(--muted); white-space: nowrap; }
+  #status { min-height: 1.3em; font-family: var(--mono); font-size: .9rem; color: var(--muted); margin-top: 4px; }
+  .ok { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/admin">← Admin</a>
+  <h1>Import scores</h1>
+  <p class="hint">Export a WhatsApp chat (Chat → Export → Without media), unzip it, and pick the
+    <code>.txt</code>. Already-registered players are skipped so nothing gets overwritten; new people
+    land in the <a href="/users" style="color:var(--cyan)">Players</a> pool to assign.</p>
+
+  <div class="panel">
+    <input type="file" id="file" accept=".txt,.md,text/plain">
+    <button id="scan" disabled>Scan file</button>
+  </div>
+
+  <div id="result"></div>
+  <div id="status"></div>
+</div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const status = document.getElementById('status');
+let text = '';
+
+document.getElementById('file').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  document.getElementById('result').innerHTML = '';
+  status.textContent = '';
+  if (!f) { document.getElementById('scan').disabled = true; return; }
+  const rd = new FileReader();
+  rd.onload = () => { text = rd.result; document.getElementById('scan').disabled = false; status.textContent = `Loaded ${(text.length/1024|0)} KB`; };
+  rd.onerror = () => { status.textContent = 'Could not read file'; };
+  rd.readAsText(f);
+});
+
+document.getElementById('scan').addEventListener('click', async () => {
+  status.textContent = 'Scanning…';
+  try {
+    const { senders } = await (await fetch('/api/import/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }),
+    })).json();
+    renderPreview(senders);
+  } catch (e) { status.textContent = 'Scan failed'; }
+});
+
+function renderPreview(senders) {
+  const newOnes = senders.filter((s) => !s.registered);
+  if (!senders.length) { document.getElementById('result').innerHTML = '<div class="panel">No maptap results found in this file.</div>'; status.textContent = ''; return; }
+  const rows = senders.map((s, i) => `
+    <label class="row ${s.registered ? 'reg' : ''}">
+      <input type="checkbox" data-sender="${esc(s.sender)}" ${s.registered ? 'disabled' : 'checked'}>
+      <span>
+        <span class="name">${esc(s.sender)}</span>
+        <span class="meta">${s.count} game${s.count === 1 ? '' : 's'} · ${s.from} – ${s.to}</span>
+      </span>
+      <span class="tag">${s.registered ? 'already registered — skipped' : 'new'}</span>
+    </label>`).join('');
+  document.getElementById('result').innerHTML =
+    `<div class="panel">${rows}</div>
+     <button class="primary" id="import" ${newOnes.length ? '' : 'disabled'}>Import selected</button>`;
+  status.textContent = `${newOnes.length} new player${newOnes.length === 1 ? '' : 's'} found`;
+  document.getElementById('import').addEventListener('click', doImport);
+}
+
+async function doImport() {
+  const chosen = [...document.querySelectorAll('#result input:checked')].map((c) => c.dataset.sender);
+  if (!chosen.length) { status.textContent = 'Nothing selected'; return; }
+  document.getElementById('import').disabled = true;
+  status.textContent = 'Importing…';
+  try {
+    const c = await (await fetch('/api/import', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, senders: chosen }),
+    })).json();
+    status.innerHTML = `<span class="ok">Imported ${c.imported} result${c.imported === 1 ? '' : 's'}` +
+      (c.replaced ? `, replaced ${c.replaced}` : '') + `.</span> Now assign them in <a href="/users" style="color:var(--cyan)">Players</a>.`;
+  } catch (e) {
+    status.textContent = 'Import failed';
+    document.getElementById('import').disabled = false;
+  }
+}
+</script>
+</body>
+</html>

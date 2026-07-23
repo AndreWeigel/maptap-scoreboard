@@ -9,6 +9,7 @@ const { priorWeek } = require('./cron');
 const users = require('./users');
 const { resolveRows } = users;
 const settings = require('./settings');
+const importer = require('./import');
 
 // HTTP Basic Auth for admin routes. Any username; the password must equal
 // ADMIN_TOKEN (compared in constant time). Unset ADMIN_TOKEN => admin locked.
@@ -37,7 +38,7 @@ function buildSummary(db, kind) {
 
 function createApp(db, status) {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '12mb' })); // WhatsApp exports run ~1MB of text
 
   app.get('/', (_req, res) => {
     res.sendFile(path.join(__dirname, '..', 'views', 'scoreboard.html'));
@@ -79,6 +80,20 @@ function createApp(db, status) {
   });
 
   app.post('/api/users', basicAuth, (req, res) => res.json(users.save(req.body || {})));
+
+  // ---- Admin: import results from a WhatsApp .txt export. ----
+  app.get('/import', basicAuth, (_req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'views', 'import.html'));
+  });
+
+  app.post('/api/import/preview', basicAuth, (req, res) => {
+    res.json({ senders: importer.preview((req.body && req.body.text) || '') });
+  });
+
+  app.post('/api/import', basicAuth, (req, res) => {
+    const b = req.body || {};
+    res.json(importer.run(db, b.text || '', Array.isArray(b.senders) ? b.senders : []));
+  });
 
   app.get('/api/standings', (req, res) => {
     const from = req.query.from || config.SEASON_START;
