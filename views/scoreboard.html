@@ -178,23 +178,6 @@
 
   <div class="badges" id="badges"></div>
 
-  <section class="panel" id="calendar">
-    <div class="panel-head">
-      <h2>Participation calendar</h2>
-      <span id="calcount"></span>
-    </div>
-    <div class="cal-wrap">
-      <div class="cal">
-        <div class="cal-months" id="cal-months"></div>
-        <div class="cal-days"><span style="grid-row:2">Mon</span><span style="grid-row:4">Wed</span><span style="grid-row:6">Fri</span></div>
-        <div class="cal-grid" id="cal-grid"></div>
-      </div>
-    </div>
-    <div class="cal-legend">Less
-      <i style="background:var(--l0)"></i><i style="background:var(--l1)"></i><i style="background:var(--l2)"></i><i style="background:var(--l3)"></i><i style="background:var(--l4)"></i>
-      More</div>
-  </section>
-
   <div class="viewtoggle">
     <button class="vt-label active" data-view="leaderboard" onclick="setView('leaderboard')">Leaderboard</button>
     <button class="switch" role="switch" aria-checked="false" aria-label="Toggle view" onclick="toggleView()">
@@ -236,6 +219,23 @@
     </div>
   </section>
 
+  <section class="panel" id="calendar">
+    <div class="panel-head">
+      <h2>Participation calendar</h2>
+      <span id="calcount"></span>
+    </div>
+    <div class="cal-wrap">
+      <div class="cal">
+        <div class="cal-months" id="cal-months"></div>
+        <div class="cal-days"><span style="grid-row:2">Mon</span><span style="grid-row:4">Wed</span><span style="grid-row:6">Fri</span></div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </div>
+    <div class="cal-legend">Less
+      <i style="background:var(--l0)"></i><i style="background:var(--l1)"></i><i style="background:var(--l2)"></i><i style="background:var(--l3)"></i><i style="background:var(--l4)"></i>
+      More</div>
+  </section>
+
   <footer>
     <span id="updated"></span>
     <button onclick="load()">↻ Reload</button>
@@ -269,7 +269,7 @@ function toggleView() { setView(view === 'leaderboard' ? 'history' : 'leaderboar
 // GitHub-style participation calendar, built from the per-day history the API
 // already returns. Shade = how many players posted that day.
 const ymd = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-function renderCalendar(hist) {
+function renderCalendar(hist, seasonStart) {
   const grid = document.getElementById('cal-grid'), months = document.getElementById('cal-months');
   grid.innerHTML = ''; months.innerHTML = '';
   if (!hist.length) { document.getElementById('calcount').textContent = '0 days'; return; }
@@ -279,12 +279,15 @@ function renderCalendar(hist) {
   const level = (n) => n === 0 ? 0 : Math.min(4, Math.ceil(4 * n / maxN));
 
   const parse = (s) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-  const first = parse(hist.map((d) => d.date).sort()[0]); // API order isn't guaranteed; take the earliest
+  // Grid spans the whole season → today, so today lands on the right and days
+  // before anyone played show as empty squares.
+  const first = parse(seasonStart || hist.map((d) => d.date).sort()[0]);
   const start = new Date(first); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = ymd(today);
 
   let col = 0, lastMonth = -1;
+  const monthAtCol = new Map();                  // col -> month name; last write wins so a short leading week doesn't double-label
   for (let dt = new Date(start); dt <= today; dt.setDate(dt.getDate() + 1)) {
     const key = ymd(dt);
     const day = byDate.get(key);
@@ -296,14 +299,14 @@ function renderCalendar(hist) {
       cell.title = `${fmtDate(key)} · ${n} player${n===1?'':'s'} · 🥇 ${w.map((r)=>r.name).join(', ')} ${w[0].score}`;
     } else cell.title = `${fmtDate(key)} · nobody played`;
     grid.appendChild(cell);
-    if (dt.getMonth() !== lastMonth) {          // month label at the current column
-      lastMonth = dt.getMonth();
-      const lab = document.createElement('span');
-      lab.textContent = MO[lastMonth];
-      lab.style.left = (col * 16) + 'px';        // 13px cell + 3px gap
-      months.appendChild(lab);
-    }
+    if (dt.getMonth() !== lastMonth) { lastMonth = dt.getMonth(); monthAtCol.set(col, MO[lastMonth]); }
     if (((dt.getDay() + 6) % 7) === 6) col++;    // Sunday ends this week column
+  }
+  for (const [c, name] of monthAtCol) {
+    const lab = document.createElement('span');
+    lab.textContent = name;
+    lab.style.left = (c * 16) + 'px';            // 13px cell + 3px gap
+    months.appendChild(lab);
   }
   document.getElementById('calcount').textContent = `${hist.length} day${hist.length===1?'':'s'} played`;
 }
@@ -349,7 +352,7 @@ async function load() {
     </tr>`;
   }).join('') || '<tr><td colspan="4" class="empty">No games yet.</td></tr>';
 
-  renderCalendar(hist);
+  renderCalendar(hist, s.seasonStart);
 
   const h = await (await fetch('/healthz')).json();
   document.getElementById('wadot').className = 'dot' + (h.whatsappConnected ? ' on' : '');
