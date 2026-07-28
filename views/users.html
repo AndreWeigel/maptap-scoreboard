@@ -35,7 +35,8 @@
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; }
   .card.off { opacity: .5; }
   .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .card-head .name { font-weight: 700; font-size: 1.05rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-head .name { font-weight: 700; font-size: 1.05rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+  .card-head .name:hover { color: var(--cyan); }
   .card .zone { display: flex; flex-wrap: wrap; gap: 7px; min-height: 40px; padding: 8px; border-radius: 10px; border: 1px dashed transparent; flex: 1; align-content: flex-start; }
   .dropzone.over { border-color: var(--cyan); background: rgba(34,211,238,.08); }
   .empty { color: var(--muted); font-size: .82rem; font-style: italic; align-self: center; }
@@ -59,7 +60,7 @@
 <div class="wrap">
   <a class="back" href="/admin">← Admin</a>
   <h1>Players</h1>
-  <p class="hint">Drag an id chip onto a player to claim it. Toggle a player off when they
+  <p class="hint">Drag an id chip onto a player to claim it. Click a name to rename. Toggle a player off when they
     leave — their history stays, they just disappear from the board. Nothing is saved until you press Save.</p>
 
   <div class="bar">
@@ -90,7 +91,7 @@ function render() {
   const cards = state.users.map((u, i) => `
     <div class="card ${u.active ? '' : 'off'}">
       <div class="card-head">
-        <span class="name" title="${esc(u.name)}">${esc(u.name)}</span>
+        <span class="name" data-rename="${i}" title="Click to rename">${esc(u.name)}</span>
         <button class="sw" role="switch" aria-checked="${u.active}" data-toggle="${i}" title="on/off"></button>
         <button class="del" data-del="${i}" title="Delete player (history kept)">✕</button>
       </div>
@@ -134,9 +135,19 @@ board.addEventListener('drop', (e) => {
   const id = e.dataTransfer.getData('text/plain');
   if (id) moveId(id, zone.dataset.target);
 });
+const nameTaken = (name, except) =>
+  state.users.some((u, i) => i !== except && u.name.toLowerCase() === name.toLowerCase());
+
 board.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-toggle]'), d = e.target.closest('[data-del]');
+  const t = e.target.closest('[data-toggle]'), d = e.target.closest('[data-del]'), r = e.target.closest('[data-rename]');
   if (t) { const u = state.users[+t.dataset.toggle]; u.active = !u.active; dirty = true; render(); }
+  if (r) {
+    const i = +r.dataset.rename, u = state.users[i];
+    const name = (prompt('Rename player?', u.name) || '').trim();
+    if (!name || name === u.name) return;
+    if (nameTaken(name, i)) return alert('That name already exists.');
+    u.name = name; dirty = true; render();
+  }
   if (d) {
     const u = state.users[+d.dataset.del];
     if (!confirm(`Delete "${u.name}"? Their ids go back to Unassigned; their results stay in the database.`)) return;
@@ -149,7 +160,7 @@ board.addEventListener('click', (e) => {
 document.getElementById('new').addEventListener('click', () => {
   const name = (prompt('New player name?') || '').trim();
   if (!name) return;
-  if (state.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return alert('That name already exists.');
+  if (nameTaken(name)) return alert('That name already exists.');
   state.users.push({ name, ids: [], active: true });
   dirty = true; render();
 });
