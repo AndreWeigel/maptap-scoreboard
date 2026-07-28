@@ -1,0 +1,35 @@
+name: deploy
+
+# SSHes into the personal-cloud server and runs the same command you'd run by
+# hand: git pull + rebuild. No registry, no image push — the server owns the
+# repo and Docker Compose, Actions just triggers it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # lets you re-deploy from the Actions tab without a push
+
+concurrency:
+  group: deploy           # a newer push cancels an in-flight deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Redeploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # ponytail: ssh-keyscan trusts whatever answers on this run (MITM ceiling).
+          # Fine for a personal box; to harden, drop the keyscan and store the host
+          # key in a DEPLOY_KNOWN_HOSTS secret written to ~/.ssh/known_hosts instead.
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_DIR' && git pull --ff-only && docker compose up -d --build"
