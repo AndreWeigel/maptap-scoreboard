@@ -29,8 +29,14 @@ function basicAuth(req, res, next) {
 
 function buildSummary(db, kind) {
   if (kind === 'daily') {
-    const d = toDateStr(new Date());
-    return dailySummary(resolveRows(db.getResults(d, d)), d);
+    let d = toDateStr(new Date());
+    let rows = resolveRows(db.getResults(d, d));
+    if (!rows.length) {
+      // Clicked after midnight but before anyone has played: post yesterday's game.
+      const y = new Date(); y.setDate(y.getDate() - 1); d = toDateStr(y);
+      rows = resolveRows(db.getResults(d, d));
+    }
+    return dailySummary(rows, d);
   }
   const { from, to } = priorWeek(new Date());
   return weeklySummary(resolveRows(db.getResults(from, to)), from, to, config);

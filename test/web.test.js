@@ -1,11 +1,14 @@
 process.env.ADMIN_TOKEN = 's3cret'; // before config loads, so basicAuth is enabled in this process
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
 const { createApp } = require('../src/web');
 const { openDb } = require('../src/db');
+const { toDateStr } = require('../src/parser');
+const users = require('../src/users');
 
-async function withServer(fn) {
-  const app = createApp(openDb(':memory:'), { whatsappConnected: true, lastMessageAt: null });
+async function withServer(fn, db = openDb(':memory:')) {
+  const app = createApp(db, { whatsappConnected: true, lastMessageAt: null });
   const server = app.listen(0);
   try { return await fn(`http://127.0.0.1:${server.address().port}`); }
   finally { server.close(); }
@@ -47,6 +50,24 @@ test('healthz is 200 when WhatsApp is connected', async () => {
   assert.strictEqual(code, 200);
   assert.strictEqual(body.status, 'ok');
   assert.strictEqual(body.whatsappConnected, true);
+});
+
+test('daily summary falls back to yesterday when today has no results yet', async () => {
+  const db = openDb(':memory:');
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  db.upsertResult({
+    play_date: toDateStr(y), player_id: 'ada@lid', player_name: 'Ada',
+    round1: 90, round2: 90, round3: 90, round4: 90, round5: 90,
+    final_score: 450, raw_text: 'x', created_at: new Date().toISOString(),
+  });
+  try {
+    users.save({ users: [{ name: 'Ada', ids: ['ada@lid'] }] });
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/admin/summary?kind=daily`, { headers: { authorization: authHeader('s3cret') } });
+      assert.strictEqual(res.status, 200);
+      assert.match(await res.text(), /Ada/);
+    }, db);
+  } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
 test('healthz is 503 when WhatsApp is down', async () => {
