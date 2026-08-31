@@ -73,7 +73,8 @@ test('daily summary falls back to yesterday when today has no results yet', asyn
 test('/api/globe: only active players with coords, layers shape', async () => {
   try {
     users.save({ users: [
-      { name: 'Ana',  ids: [], city: 'Porto', lat: 41.15, lng: -8.61 },
+      { name: 'Ana',  ids: [], city: 'Porto', country: 'Portugal', lat: 41.15, lng: -8.61 },
+      { name: 'Ben',  ids: [], city: 'Basel', lat: 47.56, lng: 7.59 }, // saved before country existed
       { name: 'Gone', ids: [], city: 'Berlin', lat: 52.5, lng: 13.4, active: false },
       { name: 'Nocity', ids: [] },
     ] });
@@ -83,8 +84,10 @@ test('/api/globe: only active players with coords, layers shape', async () => {
       const body = await res.json();
       assert.strictEqual(body.layers.length, 1);
       assert.strictEqual(body.layers[0].id, 'birthplaces');
-      assert.deepStrictEqual(body.layers[0].points,
-        [{ label: 'Ana', sublabel: 'Porto', lat: 41.15, lng: -8.61 }]);
+      assert.deepStrictEqual(body.layers[0].points, [
+        { label: 'Ana', sublabel: 'Porto, Portugal', country: 'Portugal', lat: 41.15, lng: -8.61 },
+        { label: 'Ben', sublabel: 'Basel', lat: 47.56, lng: 7.59 },
+      ]);
     });
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });

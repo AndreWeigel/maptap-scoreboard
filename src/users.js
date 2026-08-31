@@ -41,6 +41,7 @@ function normalize(reg) {
         active: u.active !== false,
         // birth city for the /globe page; keys omitted entirely when unset
         ...(typeof u.city === 'string' && u.city.trim() ? { city: u.city.trim() } : {}),
+        ...(typeof u.country === 'string' && u.country.trim() ? { country: u.country.trim() } : {}),
         ...(Number.isFinite(u.lat) && Number.isFinite(u.lng) ? { lat: u.lat, lng: u.lng } : {}),
       })),
   };

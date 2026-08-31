@@ -125,7 +125,13 @@ function createApp(db, status) {
   app.get('/api/globe', (_req, res) => {
     const points = users.get().users
       .filter((u) => u.active && Number.isFinite(u.lat))
-      .map((u) => ({ label: u.name, sublabel: u.city, lat: u.lat, lng: u.lng }));
+      .map((u) => ({
+        label: u.name,
+        sublabel: [u.city, u.country].filter(Boolean).join(', ') || undefined,
+        ...(u.country ? { country: u.country } : {}),
+        lat: u.lat,
+        lng: u.lng,
+      }));
     res.json({ layers: [{ id: 'birthplaces', label: 'Born in', points }] });
   });
 
