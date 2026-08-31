@@ -22,27 +22,10 @@
   .top a:hover { color: var(--cyan); }
   .top h1 { font-family: var(--mono); font-size: 1rem; letter-spacing: .12em; text-transform: uppercase;
     color: var(--cyan); margin: 0; text-shadow: 0 2px 12px rgba(7,11,28,.9); }
-
-  /* player marker: small glowing dot, generous invisible hitbox, name tag on hover */
-  .mark { position: relative; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
-    background: var(--cyan); border: 2px solid #fff; box-shadow: 0 0 12px var(--cyan), 0 0 4px rgba(0,0,0,.6);
-    transition: transform .15s; }
-  .mark::after { content: ""; position: absolute; inset: -14px; border-radius: 50%; } /* 44px hitbox */
-  .mark:hover { transform: scale(1.35); }
-  .mark .tag { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); display: none;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 3px 9px;
-    font: .8rem var(--mono); white-space: nowrap; }
-  .mark:hover .tag { display: block; }
-
-  #card { position: fixed; left: 18px; bottom: 18px; z-index: 2; background: var(--panel);
-    border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; min-width: 200px; max-width: 300px;
-    box-shadow: 0 8px 30px rgba(0,0,0,.45); }
-  #card .who { font-weight: 700; font-size: 1.2rem; margin-bottom: 4px; }
-  #card .row { display: flex; gap: 8px; align-items: baseline; font-size: .9rem; color: var(--muted); }
-  #card .row b { color: var(--text); font-weight: 600; }
-  #card .k { font: .68rem var(--mono); text-transform: uppercase; letter-spacing: .1em; width: 58px; flex: none; }
-  #card:empty { display: none; }
-
+  #status { position: fixed; left: 18px; bottom: 18px; z-index: 2; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px; font-size: .9rem; }
+  #status b { display: block; font-size: 1.05rem; }
+  #status:empty { display: none; }
   .credit { position: fixed; right: 8px; bottom: 6px; z-index: 2; color: rgba(152,164,212,.55);
     font: .65rem var(--mono); pointer-events: none; }
 </style>
@@ -50,32 +33,81 @@
 <body>
 <div class="top"><a href="/">← Scoreboard</a><h1>Where we're from</h1></div>
 <div id="globe"></div>
-<div id="card"></div>
+<div id="status"></div>
 <div class="credit">Imagery © Esri &amp; contributors</div>
-<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.46.2/dist/globe.gl.min.js"></script>
-<script>
-const card = document.getElementById('card');
+<script type="module">
+// ?deps pins the ENTIRE dependency graph to one three.js copy — mixed copies
+// (which jsdelivr's +esm produces) silently break the tile textures.
+import Globe from 'https://esm.sh/globe.gl@2.46.2?deps=three@0.185.1';
+import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace }
+  from 'https://esm.sh/three@0.185.1';
 
-function marker(p) {
-  const el = document.createElement('div');
-  el.className = 'mark';
-  el.innerHTML = `<span class="tag"></span>`;
-  el.querySelector('.tag').textContent = p.label;
-  el.style.pointerEvents = 'auto';
-  el.onclick = (e) => {
-    e.stopPropagation();
-    card.innerHTML = `<div class="who"></div>
-      <div class="row"><span class="k">City</span><b class="c1"></b></div>
-      <div class="row"><span class="k">Country</span><b class="c2"></b></div>`;
-    card.querySelector('.who').textContent = p.label;
-    card.querySelector('.c1').textContent = p.city || '—';
-    card.querySelector('.c2').textContent = p.country || '—';
-    globe.pointOfView({ lat: p.lat, lng: p.lng, altitude: 1.2 }, 800);
-  };
-  return el;
+const status = document.getElementById('status');
+
+// Card drawn onto a canvas texture and mounted as a sprite IN the 3D scene, so it
+// moves in perfect sync with the globe (DOM overlays lag a frame behind the WebGL render).
+// Palette mirrors the site tokens above — keep them in step with scoreboard.html.
+function cardSprite(p) {
+  const S = 4; // supersample for crisp text
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  const name = p.label;
+  const place = [p.city, p.country].filter(Boolean).join(' · ');
+  const fName = `700 ${17 * S}px Inter, -apple-system, "Segoe UI", sans-serif`;
+  const fPlace = `${12 * S}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
+  ctx.font = fName; const w1 = ctx.measureText(name).width;
+  ctx.font = fPlace; const w2 = ctx.measureText(place).width;
+
+  const pad = 13 * S, r = 10 * S;
+  const cardW = Math.max(w1, w2) + pad * 2;
+  const cardH = (place ? 52 : 34) * S;
+  const stemH = 10 * S, dotR = 5 * S;
+  c.width = Math.ceil(cardW + 4 * S);
+  c.height = cardH + stemH + dotR * 2 + 4 * S;
+  const x = 2 * S, y = 2 * S, cx = c.width / 2;
+
+  // glass panel + border
+  ctx.fillStyle = 'rgba(16,22,52,.94)';
+  ctx.strokeStyle = 'rgba(130,155,255,.5)';
+  ctx.lineWidth = 1.5 * S;
+  ctx.beginPath();
+  ctx.roundRect(x, y, cardW, cardH, r);
+  ctx.fill(); ctx.stroke();
+  // stem pointing at the spot
+  ctx.fillStyle = 'rgba(130,155,255,.5)';
+  ctx.beginPath();
+  ctx.moveTo(cx - 6 * S, y + cardH - S);
+  ctx.lineTo(cx + 6 * S, y + cardH - S);
+  ctx.lineTo(cx, y + cardH + stemH);
+  ctx.fill();
+  // glowing anchor dot on the exact location
+  ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 8 * S;
+  ctx.fillStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.arc(cx, c.height - dotR - S, dotR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // text: bright name, softly dimmed place line (stays ≥4.5:1 on the panel)
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#eaf0ff';
+  ctx.font = fName;
+  ctx.fillText(name, cx, y + 22 * S);
+  if (place) {
+    ctx.fillStyle = '#b9c5ec';
+    ctx.font = fPlace;
+    ctx.fillText(place, cx, y + 41 * S);
+  }
+
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  const spr = new Sprite(new SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  spr.center.set(0.5, 0); // anchor the dot, not the card, on the coordinates
+  const h = 11; // world units (globe radius is 100) — sprites shrink/grow with zoom
+  spr.scale.set(h * c.width / c.height, h, 1);
+  return spr;
 }
 
-var globe = Globe()(document.getElementById('globe'))
+const globe = Globe()(document.getElementById('globe'))
   .backgroundColor('rgba(0,0,0,0)')
   // satellite map tiles: higher-resolution tiles load automatically as you zoom in
   .globeTileEngineUrl((x, y, l) =>
@@ -83,8 +115,9 @@ var globe = Globe()(document.getElementById('globe'))
   .showAtmosphere(true)
   .atmosphereColor('#22d3ee')
   .atmosphereAltitude(0.16)
-  .htmlElement(marker)
-  .htmlAltitude(0.008);
+  .objectThreeObject(cardSprite)
+  .objectAltitude(0.012)
+  .onObjectClick((p) => globe.pointOfView({ lat: p.lat, lng: p.lng, altitude: 1.2 }, 800));
 
 // gentle spin until the first touch — then it's all yours
 globe.controls().autoRotate = true;
@@ -94,9 +127,9 @@ document.getElementById('globe').addEventListener('pointerdown',
 
 fetch('/api/globe').then((r) => r.json()).then(({ layers }) => {
   const points = layers.flatMap((l) => l.points.map((p) => ({ ...p, layer: l.id })));
-  globe.htmlElementsData(points);
-  if (!points.length) card.innerHTML = '<div class="who">Nobody here yet</div><div class="row">add birth cities on /users</div>';
-}).catch(() => { card.innerHTML = '<div class="who">Could not load players</div>'; });
+  globe.objectsData(points);
+  if (!points.length) status.innerHTML = '<b>Nobody here yet</b>add birth cities on /users';
+}).catch(() => { status.innerHTML = '<b>Could not load players</b>'; });
 
 function fit() { globe.width(innerWidth).height(innerHeight); }
 fit();
