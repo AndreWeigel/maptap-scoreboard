@@ -16,22 +16,26 @@ born. Also the first slice of a possible bigger "our own MapTap" idea later.
 
 ## How
 
-1. **DB** — add columns to `players`: `birth_city TEXT`, `lat REAL`,
-   `lng REAL` (nullable; players without a city just don't appear on the
-   globe).
+1. **Data** — players live in `data/users.json` (not the DB), so each user
+   entry gains optional `city`, `lat`, `lng`. `normalize()` in
+   `src/users.js` carries them through; players without coords just don't
+   appear on the globe. No DB change.
 2. **Admin entry** — the existing `/users` page gets a "Birth city" text
-   field per player. On save, if the city changed, the server geocodes it
-   once via Nominatim (OpenStreetMap, free, no key) and stores lat/lng.
-   Geocode failure → save the city anyway, leave coords null, report it in
-   the save response so André can fix the spelling.
-3. **API** — `GET /api/globe` (public, like `/api/standings`): players with
-   coords, as `[{name, city, lat, lng}]`. No auth because the scoreboard
-   already shows names publicly; city granularity only, never exact
-   addresses.
+   field per player card. When the field changes, the page geocodes it in
+   the browser via Nominatim (OpenStreetMap, free, no key) and stores
+   lat/lng on the user; the normal Save persists everything. Geocode
+   failure → city saved anyway, coords empty, a small ⚠ on the card so
+   André can fix the spelling.
+3. **API** — `GET /api/globe` (public, like `/api/standings`). Extensible
+   shape: `{ layers: [{ id, label, points: [{label, sublabel, lat, lng}] }] }`.
+   Today one layer, `birthplaces`; future point sets (custom places, visited
+   cities…) are just more layers — the page renders whatever it gets. No
+   auth because the scoreboard already shows names publicly; city
+   granularity only, never exact addresses.
 4. **Page** — `views/globe.html`, served at `GET /globe` (public). globe.gl
-   + three.js from CDN, hex-polygon country look, slow auto-rotate, dots
-   from `/api/globe`, click → name card. Dark background to match the
-   scoreboard.
+   from CDN (pinned 2.46.2; bundles three.js), hex-polygon country look,
+   slow auto-rotate, one dot per point from `/api/globe`, hover tooltip,
+   click → name card. Dark background to match the scoreboard.
 5. **Door** — 🌍 link in `views/scoreboard.html` footer.
 
 ## Not doing (on purpose)
@@ -42,5 +46,6 @@ born. Also the first slice of a possible bigger "our own MapTap" idea later.
 
 ## Testing
 
-- `node --test` unit test for the geocode-on-save logic (mock the fetch).
+- `node --test`: normalize keeps/drops city+coords correctly; `/api/globe`
+  returns only active players with coords, in the layers shape.
 - Manual: load `/globe`, spin, click a dot.
