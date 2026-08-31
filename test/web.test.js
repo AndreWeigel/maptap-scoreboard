@@ -92,6 +92,33 @@ test('/api/globe: only active players with coords, layers shape', async () => {
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
+test('upload: auth required, images only, random name, served back', async () => {
+  await withServer(async (base) => {
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'); // fake png bytes
+    assert.strictEqual((await fetch(`${base}/api/upload`, {
+      method: 'POST', headers: { 'content-type': 'image/png' }, body: png,
+    })).status, 401);
+    assert.strictEqual((await fetch(`${base}/api/upload`, {
+      method: 'POST',
+      headers: { authorization: authHeader('s3cret'), 'content-type': 'text/html' },
+      body: 'nope',
+    })).status, 400);
+    const res = await fetch(`${base}/api/upload`, {
+      method: 'POST',
+      headers: { authorization: authHeader('s3cret'), 'content-type': 'image/png' },
+      body: png,
+    });
+    assert.strictEqual(res.status, 200);
+    const { file } = await res.json();
+    assert.match(file, /^[a-f0-9]{16}\.png$/);
+    try {
+      const got = await fetch(`${base}/uploads/${file}`);
+      assert.strictEqual(got.status, 200);
+      assert.deepEqual(Buffer.from(await got.arrayBuffer()), png);
+    } finally { fs.rmSync(`data/uploads/${file}`, { force: true }); }
+  });
+});
+
 test('healthz is 503 when WhatsApp is down', async () => {
   const { code, body } = await healthz(false);
   assert.strictEqual(code, 503);

@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const express = require('express');
@@ -45,6 +46,24 @@ function buildSummary(db, kind) {
 function createApp(db, status) {
   const app = express();
   app.use(express.json({ limit: '12mb' })); // WhatsApp exports run ~1MB of text
+
+  // ---- Photo uploads (people stories). Random server-side names; client names never used.
+  const UPLOADS = path.join(path.dirname(config.DB_PATH), 'uploads');
+  const IMG_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+  // Random names never change content, so cache forever.
+  // ponytail: photos served at original size; add resizing if page weight ever hurts.
+  app.use('/uploads', express.static(UPLOADS, { maxAge: '365d', immutable: true }));
+
+  app.post('/api/upload', basicAuth, express.raw({ type: 'image/*', limit: '8mb' }), (req, res) => {
+    const ext = IMG_EXT[(req.headers['content-type'] || '').split(';')[0]];
+    if (!ext || !Buffer.isBuffer(req.body) || !req.body.length) {
+      return res.status(400).json({ error: 'jpeg/png/webp/gif only' });
+    }
+    const file = `${crypto.randomBytes(8).toString('hex')}.${ext}`;
+    fs.mkdirSync(UPLOADS, { recursive: true });
+    fs.writeFileSync(path.join(UPLOADS, file), req.body);
+    res.json({ file });
+  });
 
   app.get('/', (_req, res) => {
     res.sendFile(path.join(__dirname, '..', 'views', 'scoreboard.html'));
@@ -167,4 +186,4 @@ function createApp(db, status) {
   return app;
 }
 
-module.exports = { createApp };
+module.exports = { createApp, basicAuth };
