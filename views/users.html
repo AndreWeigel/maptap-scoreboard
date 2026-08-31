@@ -55,7 +55,11 @@
   .del { border: 0; background: none; color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 2px 4px; }
   .del:hover { color: var(--red); }
 
-  .cityrow { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .cityrow { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; position: relative; }
+  .sug { position: absolute; top: 100%; left: 0; right: 0; z-index: 6; display: flex; flex-direction: column;
+    background: var(--bg-2); border: 1px solid rgba(34,211,238,.4); border-radius: 10px; overflow: hidden; }
+  .sug button { border: 0; border-radius: 0; text-align: left; font-size: .8rem; padding: 7px 10px; }
+  .sug button:hover { background: rgba(34,211,238,.12); color: var(--cyan); }
   .cityrow input { flex: 1; min-width: 0; background: rgba(10,14,34,.72); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text); font: .82rem var(--mono); padding: 6px 8px; }
   .cityrow input:focus { outline: none; border-color: rgba(34,211,238,.4); }
@@ -103,7 +107,8 @@ function render() {
         <button class="del" data-del="${i}" title="Delete player (history kept)">✕</button>
       </div>
       <div class="cityrow">
-        <input class="city" data-city="${i}" placeholder="Birth city — e.g. Porto, Portugal" value="${esc(u.city || '')}">
+        <input class="city" data-city="${i}" placeholder="Birth city — type, then pick from the list"
+          value="${esc([u.city, u.country].filter(Boolean).join(', '))}">
         <span class="geo">${Number.isFinite(u.lat) ? '📍' : (u.city ? '⚠' : '')}</span>
       </div>
       <div class="zone dropzone" data-target="${i}">
@@ -168,21 +173,45 @@ board.addEventListener('click', (e) => {
   }
 });
 
+// City picker: on change, ask Nominatim for matches and show them under the input.
+// Picking one stores its clean city/country/coords; never trust the typed text for data.
 board.addEventListener('change', async (e) => {
   const inp = e.target.closest('[data-city]');
   if (!inp) return;
   const u = state.users[+inp.dataset.city];
-  const city = inp.value.trim();
-  delete u.city; delete u.lat; delete u.lng;
-  if (city) {
-    u.city = city;
-    try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`);
-      const hit = (await r.json())[0];
-      if (hit) { u.lat = +hit.lat; u.lng = +hit.lon; }
-    } catch {} // offline/rate-limited: city text kept, ⚠ shows, retype later to retry
+  const q = inp.value.trim();
+  delete u.city; delete u.country; delete u.lat; delete u.lng;
+  dirty = true;
+  if (!q) return render();
+  u.city = q; // fallback: raw text with ⚠ until a suggestion is picked
+  let hits = [];
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1'
+      + `&accept-language=en&limit=5&q=${encodeURIComponent(q)}`);
+    hits = await r.json();
+  } catch {} // offline/rate-limited: ⚠ shows, retype later to retry
+  if (!hits.length) return render();
+  const sug = document.createElement('div');
+  sug.className = 'sug';
+  for (const h of hits) {
+    const a = h.address || {};
+    const city = a.city || a.town || a.village || a.hamlet || a.municipality || h.name || q;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = [city, a.state, a.country].filter(Boolean).join(', ');
+    b.onclick = () => {
+      u.city = city;
+      if (a.country) u.country = a.country;
+      u.lat = +h.lat; u.lng = +h.lon;
+      render();
+    };
+    sug.appendChild(b);
   }
-  dirty = true; render();
+  inp.closest('.cityrow').appendChild(sug);
+});
+// Click anywhere else: dismiss open suggestion lists (render also refreshes the ⚠/📍 icon).
+document.addEventListener('click', (e) => {
+  if (document.querySelector('.sug') && !e.target.closest('.sug')) render();
 });
 
 document.getElementById('new').addEventListener('click', () => {
