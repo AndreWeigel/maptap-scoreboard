@@ -127,7 +127,7 @@ function createApp(db, status) {
       .filter((u) => u.active && Number.isFinite(u.lat))
       .map((u) => ({
         label: u.name,
-        sublabel: [u.city, u.country].filter(Boolean).join(', ') || undefined,
+        ...(u.city ? { city: u.city } : {}),
         ...(u.country ? { country: u.country } : {}),
         lat: u.lat,
         lng: u.lng,

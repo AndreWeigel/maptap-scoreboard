@@ -85,8 +85,8 @@ test('/api/globe: only active players with coords, layers shape', async () => {
       assert.strictEqual(body.layers.length, 1);
       assert.strictEqual(body.layers[0].id, 'birthplaces');
       assert.deepStrictEqual(body.layers[0].points, [
-        { label: 'Ana', sublabel: 'Porto, Portugal', country: 'Portugal', lat: 41.15, lng: -8.61 },
-        { label: 'Ben', sublabel: 'Basel', lat: 47.56, lng: 7.59 },
+        { label: 'Ana', city: 'Porto', country: 'Portugal', lat: 41.15, lng: -8.61 },
+        { label: 'Ben', city: 'Basel', lat: 47.56, lng: 7.59 },
       ]);
     });
   } finally { fs.rmSync(users.FILE, { force: true }); }
