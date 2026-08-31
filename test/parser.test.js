@@ -64,6 +64,17 @@ test('header date in the future -> previous year', () => {
   assert.equal(r.playDate, '2025-12-31');
 });
 
+test('header date is tomorrow (player timezone ahead of server) -> same year', () => {
+  // Player east of the server already sees Aug 27 while the server is on Aug 26.
+  const r = parseResult('www.maptap.gg August 27\n91 92 59 100 93\nFinal score: 880', new Date('2026-08-26T22:55:00'));
+  assert.equal(r.playDate, '2026-08-27');
+});
+
+test('January 1 header posted on December 31 -> next year', () => {
+  const r = parseResult('www.maptap.gg January 1\n88 96 97 97 7\nFinal score: 690', new Date('2026-12-31T23:30:00'));
+  assert.equal(r.playDate, '2027-01-01');
+});
+
 test('unknown month word falls back to server date', () => {
   const r = parseResult('www.maptap.gg Julio 20\n88 96 97 97 7\nFinal score: 690', new Date('2026-07-21T00:14:00'));
   assert.equal(r.ok, true);
