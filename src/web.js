@@ -114,6 +114,21 @@ function createApp(db, status) {
     });
   });
 
+  // ---- Globe easter egg (public — same exposure as the scoreboard: names + city only). ----
+  app.get('/globe', (_req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'views', 'globe.html'));
+  });
+
+  // Point layers for the globe page. One layer today; future point sets
+  // (custom places, visited cities, …) are just more entries in `layers` —
+  // the page renders whatever arrives.
+  app.get('/api/globe', (_req, res) => {
+    const points = users.get().users
+      .filter((u) => u.active && Number.isFinite(u.lat))
+      .map((u) => ({ label: u.name, sublabel: u.city, lat: u.lat, lng: u.lng }));
+    res.json({ layers: [{ id: 'birthplaces', label: 'Born in', points }] });
+  });
+
   // Manual trigger. GET previews the text; add &send=1 to actually post to the group.
   //   /admin/summary?kind=weekly            -> returns the text, sends nothing
   //   /admin/summary?kind=daily&send=1      -> posts it now
