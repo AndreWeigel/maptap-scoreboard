@@ -54,14 +54,21 @@
   .sw[aria-checked="true"]::after { left: 23px; background: var(--green); }
   .del { border: 0; background: none; color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 2px 4px; }
   .del:hover { color: var(--red); }
+
+  .cityrow { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .cityrow input { flex: 1; min-width: 0; background: rgba(10,14,34,.72); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font: .82rem var(--mono); padding: 6px 8px; }
+  .cityrow input:focus { outline: none; border-color: rgba(34,211,238,.4); }
+  .cityrow .geo { font-size: .78rem; flex: none; font-family: var(--mono); color: var(--muted); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <a class="back" href="/admin">← Admin</a>
   <h1>Players</h1>
-  <p class="hint">Drag an id chip onto a player to claim it. Click a name to rename. Toggle a player off when they
-    leave — their history stays, they just disappear from the board. Nothing is saved until you press Save.</p>
+  <p class="hint">Drag an id chip onto a player to claim it. Click a name to rename. Type a birth city to put them
+    on the secret globe. Toggle a player off when they leave — their history stays, they just disappear from the
+    board. Nothing is saved until you press Save.</p>
 
   <div class="bar">
     <button id="new">+ New player</button>
@@ -94,6 +101,10 @@ function render() {
         <span class="name" data-rename="${i}" title="Click to rename">${esc(u.name)}</span>
         <button class="sw" role="switch" aria-checked="${u.active}" data-toggle="${i}" title="on/off"></button>
         <button class="del" data-del="${i}" title="Delete player (history kept)">✕</button>
+      </div>
+      <div class="cityrow">
+        <input class="city" data-city="${i}" placeholder="Birth city — e.g. Porto, Portugal" value="${esc(u.city || '')}">
+        <span class="geo">${Number.isFinite(u.lat) ? '📍' : (u.city ? '⚠' : '')}</span>
       </div>
       <div class="zone dropzone" data-target="${i}">
         ${u.ids.length ? u.ids.map(chipHTML).join('') : '<span class="empty">drop ids here</span>'}
@@ -155,6 +166,23 @@ board.addEventListener('click', (e) => {
     state.users.splice(+d.dataset.del, 1);
     dirty = true; render();
   }
+});
+
+board.addEventListener('change', async (e) => {
+  const inp = e.target.closest('[data-city]');
+  if (!inp) return;
+  const u = state.users[+inp.dataset.city];
+  const city = inp.value.trim();
+  delete u.city; delete u.lat; delete u.lng;
+  if (city) {
+    u.city = city;
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`);
+      const hit = (await r.json())[0];
+      if (hit) { u.lat = +hit.lat; u.lng = +hit.lon; }
+    } catch {} // offline/rate-limited: city text kept, ⚠ shows, retype later to retry
+  }
+  dirty = true; render();
 });
 
 document.getElementById('new').addEventListener('click', () => {
