@@ -17,15 +17,15 @@ born. Also the first slice of a possible bigger "our own MapTap" idea later.
 ## How
 
 1. **Data** — players live in `data/users.json` (not the DB), so each user
-   entry gains optional `city`, `lat`, `lng`. `normalize()` in
+   entry gains optional `city`, `country`, `lat`, `lng`. `normalize()` in
    `src/users.js` carries them through; players without coords just don't
    appear on the globe. No DB change.
-2. **Admin entry** — the existing `/users` page gets a "Birth city" text
-   field per player card. When the field changes, the page geocodes it in
-   the browser via Nominatim (OpenStreetMap, free, no key) and stores
-   lat/lng on the user; the normal Save persists everything. Geocode
-   failure → city saved anyway, coords empty, a small ⚠ on the card so
-   André can fix the spelling.
+2. **Admin entry** — the existing `/users` page gets a "Birth city" field
+   per player card. On change, the page queries Nominatim (OpenStreetMap,
+   free, no key) for the top 5 matches and shows them as a pick-list;
+   picking one stores that match's structured city name, country, and
+   coordinates — typed text is never trusted as data. No match / offline →
+   raw text kept as city, coords empty, a small ⚠ on the card.
 3. **API** — `GET /api/globe` (public, like `/api/standings`). Extensible
    shape: `{ layers: [{ id, label, points: [{label, sublabel, lat, lng}] }] }`.
    Today one layer, `birthplaces`; future point sets (custom places, visited
