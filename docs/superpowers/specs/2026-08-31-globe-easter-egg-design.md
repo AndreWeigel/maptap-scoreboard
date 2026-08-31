@@ -32,10 +32,14 @@ born. Also the first slice of a possible bigger "our own MapTap" idea later.
    cities…) are just more layers — the page renders whatever it gets. No
    auth because the scoreboard already shows names publicly; city
    granularity only, never exact addresses.
-4. **Page** — `views/globe.html`, served at `GET /globe` (public). globe.gl
-   from CDN (pinned 2.46.2; bundles three.js), hex-polygon country look,
-   slow auto-rotate, one dot per point from `/api/globe`, hover tooltip,
-   click → name card. Dark background to match the scoreboard.
+4. **Page** — `views/globe.html`, served at `GET /globe` (public). MapLibre
+   GL (pinned 6.6.0) globe projection with Esri satellite tiles. Players
+   render as canvas-drawn map symbols: always-visible cards (name + city ·
+   country) anchored to the surface; the engine handles collision (crowded
+   ones auto-hide), horizon occlusion, and per-frame tracking. Same-city
+   players merge into one card; below zoom 3.6 cards become name-only
+   chips. Slow auto-rotate until first interaction; click → fly to the
+   spot. Dark space styling to match the scoreboard.
 5. **Door** — 🌍 link in `views/scoreboard.html` footer.
 
 ## Not doing (on purpose)
