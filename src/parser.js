@@ -28,16 +28,20 @@ function toDateStr(d) {
 }
 
 // Header date beats the clock (post-midnight posts belong to yesterday's game).
-// Year from context: current year, unless that lands in the future -> previous year.
+// Year from context: the header is at most a day off the server clock (player's
+// timezone) or ~a year off (December game posted in January), so pick whichever
+// year puts the date closest to now. "Tomorrow" must stay this year — treating
+// it as last year filed timezone-ahead players 364 days in the past.
 function resolveDate(text, now) {
   const m = text.match(DATE_RE);
   if (m) {
     const month = MONTHS[norm(m[1])];
     const day = Number(m[2]);
     if (month && day >= 1 && day <= 31) {
-      const year = now.getFullYear();
-      const date = `${year}-${pad(month)}-${pad(day)}`;
-      return date > toDateStr(now) ? `${year - 1}-${pad(month)}-${pad(day)}` : date;
+      const dist = (y) => Math.abs(new Date(y, month - 1, day, 12) - now);
+      const year = [-1, 0, 1].map((d) => now.getFullYear() + d)
+        .reduce((a, b) => (dist(b) < dist(a) ? b : a));
+      return `${year}-${pad(month)}-${pad(day)}`;
     }
     console.log(`[parser] unknown month word "${m[1]}" — falling back to server date (extend MONTHS)`);
   }

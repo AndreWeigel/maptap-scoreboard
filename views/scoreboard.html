@@ -152,6 +152,8 @@
   .empty { font-family: var(--mono); font-size: 1.2rem; text-align: center; color: var(--muted); padding: 44px 0; }
 
   footer { margin-top: 20px; display: flex; gap: 16px; align-items: center; justify-content: space-between; color: var(--muted); font-size: .78rem; flex-wrap: wrap; }
+  footer .egg { text-decoration: none; opacity: .35; transition: opacity .2s; }
+  footer .egg:hover { opacity: 1; }
   button { font-family: var(--body); font-weight: 600; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 9px 17px; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
   button:hover { border-color: var(--cyan); background: rgba(34,211,238,.1); }
   :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
@@ -246,6 +248,7 @@
 
   <footer>
     <span id="updated"></span>
+    <a class="egg" href="/globe" aria-label="A little globe">🌍</a>
     <button onclick="load()">↻ Reload</button>
   </footer>
 </div>

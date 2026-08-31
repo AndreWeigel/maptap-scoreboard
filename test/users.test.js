@@ -45,3 +45,16 @@ test('save normalizes: drops nameless, dedups ids, defaults active true', () => 
     assert.deepEqual(saved.users[0], { name: 'Bob', ids: ['a', 'b'], active: true });
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });
+
+test('save keeps city and coords, drops junk, coords only as a pair', () => {
+  try {
+    const saved = users.save({ users: [
+      { name: 'Ana',  ids: [], city: ' Porto, Portugal ', lat: 41.15, lng: -8.61 },
+      { name: 'Bob',  ids: [], city: 42, lat: 'x', lng: -8 },      // junk city, junk lat
+      { name: 'Cara', ids: [], lat: 50.1 },                        // lat without lng
+    ] });
+    assert.deepEqual(saved.users[0], { name: 'Ana', ids: [], active: true, city: 'Porto, Portugal', lat: 41.15, lng: -8.61 });
+    assert.deepEqual(saved.users[1], { name: 'Bob', ids: [], active: true });
+    assert.deepEqual(saved.users[2], { name: 'Cara', ids: [], active: true });
+  } finally { fs.rmSync(users.FILE, { force: true }); }
+});

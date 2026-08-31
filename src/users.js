@@ -39,6 +39,9 @@ function normalize(reg) {
         name: u.name.trim(),
         ids: Array.isArray(u.ids) ? [...new Set(u.ids.filter((x) => typeof x === 'string' && x))] : [],
         active: u.active !== false,
+        // birth city for the /globe page; keys omitted entirely when unset
+        ...(typeof u.city === 'string' && u.city.trim() ? { city: u.city.trim() } : {}),
+        ...(Number.isFinite(u.lat) && Number.isFinite(u.lng) ? { lat: u.lat, lng: u.lng } : {}),
       })),
   };
 }

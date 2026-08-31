@@ -70,6 +70,25 @@ test('daily summary falls back to yesterday when today has no results yet', asyn
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
+test('/api/globe: only active players with coords, layers shape', async () => {
+  try {
+    users.save({ users: [
+      { name: 'Ana',  ids: [], city: 'Porto', lat: 41.15, lng: -8.61 },
+      { name: 'Gone', ids: [], city: 'Berlin', lat: 52.5, lng: 13.4, active: false },
+      { name: 'Nocity', ids: [] },
+    ] });
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/api/globe`);
+      assert.strictEqual(res.status, 200);
+      const body = await res.json();
+      assert.strictEqual(body.layers.length, 1);
+      assert.strictEqual(body.layers[0].id, 'birthplaces');
+      assert.deepStrictEqual(body.layers[0].points,
+        [{ label: 'Ana', sublabel: 'Porto', lat: 41.15, lng: -8.61 }]);
+    });
+  } finally { fs.rmSync(users.FILE, { force: true }); }
+});
+
 test('healthz is 503 when WhatsApp is down', async () => {
   const { code, body } = await healthz(false);
   assert.strictEqual(code, 503);
