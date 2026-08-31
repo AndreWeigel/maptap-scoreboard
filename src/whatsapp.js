@@ -14,6 +14,16 @@ function extractText(msg) {
   return m?.conversation || m?.extendedTextMessage?.text || '';
 }
 
+// Our last 256 sent messages, so getMessage can serve a retry request when a
+// member's phone fails to decrypt a digest. Baileys then re-sends it with a
+// forced-fresh session, which also repairs broken encryption with that member.
+// Module-level: must survive the socket re-creation on every reconnect.
+const sentMsgs = new Map();
+function rememberSent(id, message) {
+  sentMsgs.set(id, message);
+  if (sentMsgs.size > 256) sentMsgs.delete(sentMsgs.keys().next().value);
+}
+
 async function startWhatsApp(db, status) {
   const { state, saveCreds } = await useMultiFileAuthState(config.AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
@@ -22,6 +32,7 @@ async function startWhatsApp(db, status) {
     version,
     auth: state,
     logger: pino({ level: 'warn' }),
+    getMessage: async (key) => sentMsgs.get(key.id),
   });
 
   status.sock = sock; // so cron can post digests to the group; refreshed on reconnect
@@ -53,6 +64,7 @@ async function startWhatsApp(db, status) {
 
   sock.ev.on('messages.upsert', ({ messages }) => {
     for (const msg of messages) {
+      if (msg.key.fromMe && msg.key.id && msg.message) rememberSent(msg.key.id, msg.message);
       const jid = msg.key.remoteJid;
       if (!jid) continue;
       if (!config.GROUP_ID && jid.endsWith('@g.us')) {
