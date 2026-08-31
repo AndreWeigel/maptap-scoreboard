@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MapTap · Globe</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.css">
 <style>
   :root {
     color-scheme: dark;
@@ -15,7 +16,7 @@
   * { box-sizing: border-box; }
   body { margin: 0; height: 100vh; overflow: hidden; color: var(--text); font: 15px/1.5 var(--body);
     background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
-  #globe { position: fixed; inset: 0; }
+  #map { position: fixed; inset: 0; background: transparent; }
   .top { position: fixed; top: 0; left: 0; right: 0; padding: 14px 18px; display: flex; gap: 12px;
     align-items: baseline; z-index: 2; pointer-events: none; }
   .top a { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: .95rem; pointer-events: auto; }
@@ -32,108 +33,175 @@
 </head>
 <body>
 <div class="top"><a href="/">← Scoreboard</a><h1>Where we're from</h1></div>
-<div id="globe"></div>
+<div id="map"></div>
 <div id="status"></div>
-<div class="credit">Imagery © Esri &amp; contributors</div>
+<div class="credit">Imagery © Esri &amp; contributors · MapLibre</div>
 <script type="module">
-// ?deps pins the ENTIRE dependency graph to one three.js copy — mixed copies
-// (which jsdelivr's +esm produces) silently break the tile textures.
-import Globe from 'https://esm.sh/globe.gl@2.46.2?deps=three@0.185.1';
-import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace }
-  from 'https://esm.sh/three@0.185.1';
+import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs';
 
 const status = document.getElementById('status');
 
-// Card drawn onto a canvas texture and mounted as a sprite IN the 3D scene, so it
-// moves in perfect sync with the globe (DOM overlays lag a frame behind the WebGL render).
-// Palette mirrors the site tokens above — keep them in step with scoreboard.html.
-function cardSprite(p) {
-  const S = 4; // supersample for crisp text
+// Card / chip images drawn with the site's tokens (keep in step with scoreboard.html).
+// Rendered as map symbols, so MapLibre gives us collision (overlapping ones auto-hide),
+// horizon occlusion, and per-frame tracking for free.
+const S = 3; // supersample for crisp text
+function draw(fn) {
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d');
-  const name = p.label;
-  const place = [p.city, p.country].filter(Boolean).join(' · ');
-  const fName = `700 ${17 * S}px Inter, -apple-system, "Segoe UI", sans-serif`;
-  const fPlace = `${12 * S}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
-  ctx.font = fName; const w1 = ctx.measureText(name).width;
-  ctx.font = fPlace; const w2 = ctx.measureText(place).width;
+  fn(ctx, c);
+  return c.getContext('2d').getImageData(0, 0, c.width, c.height);
+}
+const FONT_NAME = (px) => `700 ${px * S}px Inter, -apple-system, "Segoe UI", sans-serif`;
+const FONT_PLACE = (px) => `${px * S}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
 
-  const pad = 13 * S, r = 10 * S;
-  const cardW = Math.max(w1, w2) + pad * 2;
-  const cardH = (place ? 52 : 34) * S;
-  const stemH = 10 * S, dotR = 5 * S;
-  c.width = Math.ceil(cardW + 4 * S);
-  c.height = cardH + stemH + dotR * 2 + 4 * S;
-  const x = 2 * S, y = 2 * S, cx = c.width / 2;
-
-  // glass panel + border
+function panel(ctx, x, y, w, h, r) {
   ctx.fillStyle = 'rgba(16,22,52,.94)';
   ctx.strokeStyle = 'rgba(130,155,255,.5)';
   ctx.lineWidth = 1.5 * S;
-  ctx.beginPath();
-  ctx.roundRect(x, y, cardW, cardH, r);
-  ctx.fill(); ctx.stroke();
-  // stem pointing at the spot
-  ctx.fillStyle = 'rgba(130,155,255,.5)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 6 * S, y + cardH - S);
-  ctx.lineTo(cx + 6 * S, y + cardH - S);
-  ctx.lineTo(cx, y + cardH + stemH);
-  ctx.fill();
-  // glowing anchor dot on the exact location
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); ctx.stroke();
+}
+function anchorDot(ctx, cx, cy) {
   ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 8 * S;
   ctx.fillStyle = '#22d3ee';
-  ctx.beginPath();
-  ctx.arc(cx, c.height - dotR - S, dotR, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 4.5 * S, 0, Math.PI * 2); ctx.fill();
   ctx.shadowBlur = 0;
-  // text: bright name, softly dimmed place line (stays ≥4.5:1 on the panel)
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#eaf0ff';
-  ctx.font = fName;
-  ctx.fillText(name, cx, y + 22 * S);
-  if (place) {
-    ctx.fillStyle = '#b9c5ec';
-    ctx.font = fPlace;
-    ctx.fillText(place, cx, y + 41 * S);
-  }
-
-  const tex = new CanvasTexture(c);
-  tex.colorSpace = SRGBColorSpace;
-  const spr = new Sprite(new SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  spr.center.set(0.5, 0); // anchor the dot, not the card, on the coordinates
-  const h = 11; // world units (globe radius is 100) — sprites shrink/grow with zoom
-  spr.scale.set(h * c.width / c.height, h, 1);
-  return spr;
 }
 
-const globe = Globe()(document.getElementById('globe'))
-  .backgroundColor('rgba(0,0,0,0)')
-  // satellite map tiles: higher-resolution tiles load automatically as you zoom in
-  .globeTileEngineUrl((x, y, l) =>
-    `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`)
-  .showAtmosphere(true)
-  .atmosphereColor('#22d3ee')
-  .atmosphereAltitude(0.16)
-  .objectThreeObject(cardSprite)
-  .objectAltitude(0.012)
-  .onObjectClick((p) => globe.pointOfView({ lat: p.lat, lng: p.lng, altitude: 1.2 }, 800));
+function cardImage(name, place) {
+  return draw((ctx, c) => {
+    ctx.font = FONT_NAME(17); const w1 = ctx.measureText(name).width;
+    ctx.font = FONT_PLACE(12); const w2 = ctx.measureText(place).width;
+    const pad = 13 * S;
+    const cardW = Math.max(w1, w2) + pad * 2;
+    const cardH = (place ? 52 : 34) * S, stemH = 9 * S;
+    c.width = Math.ceil(cardW + 4 * S); c.height = cardH + stemH + 14 * S;
+    const x = 2 * S, y = 2 * S, cx = c.width / 2;
+    panel(ctx, x, y, cardW, cardH, 10 * S);
+    ctx.fillStyle = 'rgba(130,155,255,.5)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 6 * S, y + cardH - S); ctx.lineTo(cx + 6 * S, y + cardH - S);
+    ctx.lineTo(cx, y + cardH + stemH); ctx.fill();
+    anchorDot(ctx, cx, c.height - 6 * S);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#eaf0ff'; ctx.font = FONT_NAME(17);
+    ctx.fillText(name, cx, y + 22 * S);
+    if (place) {
+      ctx.fillStyle = '#b9c5ec'; ctx.font = FONT_PLACE(12);
+      ctx.fillText(place, cx, y + 41 * S);
+    }
+  });
+}
+
+function chipImage(name) {
+  return draw((ctx, c) => {
+    ctx.font = FONT_NAME(12); const w1 = ctx.measureText(name).width;
+    const pad = 9 * S, chipH = 24 * S;
+    c.width = Math.ceil(w1 + pad * 2 + 4 * S); c.height = chipH + 14 * S;
+    const cx = c.width / 2;
+    panel(ctx, 2 * S, 2 * S, c.width - 4 * S, chipH, chipH / 2);
+    anchorDot(ctx, cx, c.height - 6 * S);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#eaf0ff'; ctx.font = FONT_NAME(12);
+    ctx.fillText(name, cx, 2 * S + 16.5 * S);
+  });
+}
+
+const map = new maplibregl.Map({
+  container: 'map',
+  attributionControl: false, // the .credit line carries the Esri notice
+  minZoom: 1,
+  maxZoom: 17,
+  center: [10, 35],
+  zoom: 1.8,
+  style: {
+    version: 8,
+    projection: { type: 'globe' },
+    sources: {
+      sat: {
+        type: 'raster',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256,
+        maxzoom: 17,
+        attribution: 'Imagery © Esri & contributors',
+      },
+    },
+    layers: [{ id: 'sat', type: 'raster', source: 'sat' }],
+    sky: {
+      'sky-color': '#02040f',
+      'horizon-color': '#0e5d7a',
+      'fog-color': '#070b1c',
+      'sky-horizon-blend': 0.6,
+      'horizon-fog-blend': 0.6,
+      'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 6, 1, 8, 0.1],
+    },
+  },
+});
+
+window.map = map; // console/debug handle
 
 // gentle spin until the first touch — then it's all yours
-globe.controls().autoRotate = true;
-globe.controls().autoRotateSpeed = 0.55;
-document.getElementById('globe').addEventListener('pointerdown',
-  () => { globe.controls().autoRotate = false; }, { once: true });
+let spinning = true;
+const stopSpin = () => { spinning = false; };
+for (const ev of ['mousedown', 'touchstart', 'wheel']) map.on(ev, stopSpin);
+function spin() {
+  if (!spinning || map.getZoom() > 4) return;
+  const c = map.getCenter();
+  map.easeTo({ center: [c.lng + 10, c.lat], duration: 2500, easing: (n) => n });
+}
+map.on('moveend', () => spin());
 
-fetch('/api/globe').then((r) => r.json()).then(({ layers }) => {
-  const points = layers.flatMap((l) => l.points.map((p) => ({ ...p, layer: l.id })));
-  globe.objectsData(points);
-  if (!points.length) status.innerHTML = '<b>Nobody here yet</b>add birth cities on /users';
-}).catch(() => { status.innerHTML = '<b>Could not load players</b>'; });
+const SWAP = 3.6; // below: name chips, above: full cards
 
-function fit() { globe.width(innerWidth).height(innerHeight); }
-fit();
-addEventListener('resize', fit);
+map.on('load', async () => {
+  try {
+    const { layers } = await (await fetch('/api/globe')).json();
+    const points = layers.flatMap((l) => l.points);
+    if (!points.length) {
+      status.innerHTML = '<b>Nobody here yet</b>add birth cities on /users';
+      return;
+    }
+    // players in the same spot share one card ("Ana & Ben")
+    const groups = new Map();
+    for (const p of points) {
+      const k = `${p.lat},${p.lng}`;
+      if (!groups.has(k)) groups.set(k, { ...p, names: [] });
+      groups.get(k).names.push(p.label);
+    }
+    const features = [...groups.values()].map((g, i) => {
+      const name = g.names.join(' & ');
+      const place = [g.city, g.country].filter(Boolean).join(' · ');
+      map.addImage(`card-${i}`, cardImage(name, place), { pixelRatio: S });
+      map.addImage(`chip-${i}`, chipImage(name), { pixelRatio: S });
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [g.lng, g.lat] },
+        properties: { i, name },
+      };
+    });
+    map.addSource('players', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+    const common = { type: 'symbol', source: 'players' };
+    map.addLayer({ ...common, id: 'chips', maxzoom: SWAP, layout: {
+      'icon-image': ['concat', 'chip-', ['get', 'i']],
+      'icon-anchor': 'bottom', 'icon-padding': 2, 'symbol-sort-key': ['get', 'i'],
+    } });
+    map.addLayer({ ...common, id: 'cards', minzoom: SWAP, layout: {
+      'icon-image': ['concat', 'card-', ['get', 'i']],
+      'icon-anchor': 'bottom', 'icon-padding': 2, 'symbol-sort-key': ['get', 'i'],
+    } });
+    for (const id of ['chips', 'cards']) {
+      map.on('click', id, (e) => {
+        stopSpin();
+        const [lng, lat] = e.features[0].geometry.coordinates;
+        map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 5.5), duration: 1200 });
+      });
+      map.on('mouseenter', id, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', id, () => { map.getCanvas().style.cursor = ''; });
+    }
+    spin();
+  } catch {
+    status.innerHTML = '<b>Could not load players</b>';
+  }
+});
 </script>
 </body>
 </html>
