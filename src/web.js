@@ -150,6 +150,8 @@ function createApp(db, status) {
         ...(u.country ? { country: u.country } : {}),
         lat: u.lat,
         lng: u.lng,
+        ...(u.story ? { story: u.story } : {}),
+        ...(u.photos ? { photos: u.photos } : {}),
       }));
     res.json({ layers: [{ id: 'birthplaces', label: 'Born in', points }] });
   });
