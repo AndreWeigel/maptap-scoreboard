@@ -64,6 +64,20 @@
     border-radius: 8px; color: var(--text); font: .82rem var(--mono); padding: 6px 8px; }
   .cityrow input:focus { outline: none; border-color: rgba(34,211,238,.4); }
   .cityrow .geo { font-size: .78rem; flex: none; font-family: var(--mono); color: var(--muted); }
+
+  .story { width: 100%; margin: 0 0 8px; background: rgba(10,14,34,.72); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font: .82rem/1.45 var(--body); padding: 6px 8px; resize: vertical; min-height: 34px; }
+  .story:focus { outline: none; border-color: rgba(34,211,238,.4); }
+  .photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+  .ph { position: relative; width: 96px; }
+  .ph img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .ph input { width: 100%; margin-top: 3px; background: rgba(10,14,34,.72); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font: .68rem var(--mono); padding: 3px 5px; }
+  .ph .del { position: absolute; top: 2px; right: 2px; background: rgba(7,11,28,.75); border-radius: 6px; }
+  .addph { width: 96px; height: 72px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font: .78rem var(--mono); }
+  .addph:hover { border-color: rgba(34,211,238,.4); color: var(--cyan); }
+  .addph.busy { opacity: .5; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -72,7 +86,8 @@
   <h1>Players</h1>
   <p class="hint">Drag an id chip onto a player to claim it. Click a name to rename. Type a birth city to put them
     on the secret globe. Toggle a player off when they leave — their history stays, they just disappear from the
-    board. Nothing is saved until you press Save.</p>
+    board. Add photos + a story and they show when someone clicks the player on the globe.
+    Nothing is saved until you press Save.</p>
 
   <div class="bar">
     <button id="new">+ New player</button>
@@ -110,6 +125,16 @@ function render() {
         <input class="city" data-city="${i}" placeholder="Birth city — type, then pick from the list"
           value="${esc([u.city, u.country].filter(Boolean).join(', '))}">
         <span class="geo">${Number.isFinite(u.lat) ? '📍' : (u.city ? '⚠' : '')}</span>
+      </div>
+      <textarea class="story" data-story="${i}" placeholder="Their story — shows on the globe">${esc(u.story || '')}</textarea>
+      <div class="photos">
+        ${(u.photos || []).map((p, j) => `
+        <div class="ph">
+          <img src="/uploads/${esc(p.file)}" alt="">
+          <input data-cap="${i}:${j}" placeholder="Caption" value="${esc(p.caption || '')}">
+          <button class="del" data-delphoto="${i}:${j}" title="Remove photo">✕</button>
+        </div>`).join('')}
+        <label class="addph">+ photo<input type="file" accept="image/*" data-photo="${i}" hidden></label>
       </div>
       <div class="zone dropzone" data-target="${i}">
         ${u.ids.length ? u.ids.map(chipHTML).join('') : '<span class="empty">drop ids here</span>'}
@@ -164,6 +189,12 @@ board.addEventListener('click', (e) => {
     if (nameTaken(name, i)) return alert('That name already exists.');
     u.name = name; dirty = true; render();
   }
+  const dp = e.target.closest('[data-delphoto]');
+  if (dp) {
+    const [i, j] = dp.dataset.delphoto.split(':').map(Number);
+    state.users[i].photos.splice(j, 1);
+    dirty = true; render();
+  }
   if (d) {
     const u = state.users[+d.dataset.del];
     if (!confirm(`Delete "${u.name}"? Their ids go back to Unassigned; their results stay in the database.`)) return;
@@ -176,6 +207,28 @@ board.addEventListener('click', (e) => {
 // City picker: on change, ask Nominatim for matches and show them under the input.
 // Picking one stores its clean city/country/coords; never trust the typed text for data.
 board.addEventListener('change', async (e) => {
+  const st = e.target.closest('[data-story]');
+  if (st) { const u = state.users[+st.dataset.story]; u.story = st.value; dirty = true; render(); return; }
+  const cap = e.target.closest('[data-cap]');
+  if (cap) {
+    const [i, j] = cap.dataset.cap.split(':').map(Number);
+    state.users[i].photos[j].caption = cap.value;
+    dirty = true; render(); return;
+  }
+  // Photo upload: the file goes to the server immediately (so we get its random
+  // name back); the registry entry still only persists on Save.
+  const ph = e.target.closest('[data-photo]');
+  if (ph && ph.files[0]) {
+    const u = state.users[+ph.dataset.photo], f = ph.files[0];
+    ph.closest('.addph').classList.add('busy');
+    try {
+      const r = await fetch('/api/upload', { method: 'POST', headers: { 'content-type': f.type }, body: f });
+      if (!r.ok) throw new Error(r.status);
+      (u.photos ||= []).push({ file: (await r.json()).file });
+      dirty = true; render();
+    } catch { alert('Upload failed — jpeg/png/webp/gif up to 8 MB.'); render(); }
+    return;
+  }
   const inp = e.target.closest('[data-city]');
   if (!inp) return;
   const u = state.users[+inp.dataset.city];

@@ -41,6 +41,21 @@
   .pcard.mini { border-radius: 999px; padding: 3px 11px; }
   .pcard.mini .nm { font-size: .78rem; }
   .pcard.mini .pl { display: none; }
+
+  /* story panel (opens on card click) */
+  #panel { position: fixed; top: 60px; right: 14px; bottom: 14px; z-index: 4; width: min(340px, calc(100vw - 28px));
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  #panel[hidden] { display: none; }
+  #panel .close { position: sticky; top: 0; float: right; background: rgba(7,11,28,.75); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 2px 8px; }
+  #panel .close:hover { color: var(--cyan); }
+  #panel h2 { font: 700 1.05rem/1.3 var(--body); margin: 0 0 2px; }
+  #panel .place { font: .72rem var(--mono); color: var(--muted); margin: 0 0 8px; }
+  #panel .story { font-size: .88rem; margin: 0 0 10px; white-space: pre-wrap; }
+  #panel img { width: 100%; border-radius: 10px; border: 1px solid var(--border); display: block; }
+  #panel .cap { font: .72rem var(--mono); color: var(--muted); margin: 4px 0 12px; }
+  #panel .person + .person { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
 </style>
 </head>
 <body>
@@ -48,12 +63,40 @@
 <div id="map"></div>
 <svg id="lines"></svg>
 <div id="status"></div>
+<div id="panel" hidden><button class="close" title="Close">✕</button><div id="pbody"></div></div>
 <div class="credit">Imagery © Esri &amp; contributors · MapLibre</div>
 <script type="module">
 import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs';
 
 const status = document.getElementById('status');
 const svg = document.getElementById('lines');
+const panel = document.getElementById('panel');
+const pbody = document.getElementById('pbody');
+panel.querySelector('.close').addEventListener('click', () => { panel.hidden = true; });
+
+// All content is untrusted user text — build with createElement/textContent, never innerHTML.
+function openPanel(g) {
+  pbody.replaceChildren(...g.people.map((p) => {
+    const d = document.createElement('div');
+    d.className = 'person';
+    const add = (tag, cls, text) => {
+      const el = document.createElement(tag);
+      el.className = cls; el.textContent = text;
+      d.appendChild(el); return el;
+    };
+    add('h2', '', p.label);
+    add('p', 'place', [p.city, p.country].filter(Boolean).join(' · '));
+    if (p.story) add('p', 'story', p.story);
+    for (const ph of p.photos || []) {
+      const img = document.createElement('img');
+      img.src = `/uploads/${ph.file}`; img.alt = ph.caption || p.label; img.loading = 'lazy';
+      d.appendChild(img);
+      add('p', 'cap', ph.caption || '');
+    }
+    return d;
+  }));
+  panel.hidden = false;
+}
 
 const map = new maplibregl.Map({
   container: 'map',
@@ -159,8 +202,9 @@ map.on('load', async () => {
     const byCoord = new Map();
     for (const p of points) {
       const k = `${p.lat},${p.lng}`;
-      if (!byCoord.has(k)) byCoord.set(k, { ...p, names: [] });
+      if (!byCoord.has(k)) byCoord.set(k, { ...p, names: [], people: [] });
       byCoord.get(k).names.push(p.label);
+      byCoord.get(k).people.push(p);
     }
     groups = [...byCoord.values()];
 
@@ -185,6 +229,7 @@ map.on('load', async () => {
       el.addEventListener('click', () => {
         stopSpin();
         map.flyTo({ center: [g.lng, g.lat], zoom: Math.max(map.getZoom(), 5.5), duration: 1200 });
+        openPanel(g);
       });
       g.el = el;
       g.marker = new maplibregl.Marker({ element: el, anchor: 'center' })

@@ -58,3 +58,26 @@ test('save keeps city and coords, drops junk, coords only as a pair', () => {
     assert.deepEqual(saved.users[2], { name: 'Cara', ids: [], active: true });
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });
+
+test('save keeps story and valid photos, drops junk photos and captions', () => {
+  try {
+    const saved = users.save({ users: [
+      { name: 'Ana', ids: [], story: '  Loves maps.  ', photos: [
+        { file: 'a1b2c3d4e5f60718.jpg', caption: ' At the beach ' },
+        { file: 'a1b2c3d4e5f60718.png' },                    // no caption: fine
+        { file: '../../etc/passwd' },                        // traversal: dropped
+        { file: 'a1b2c3d4e5f60718.svg' },                    // bad ext: dropped
+        { file: 'a1b2c3d4e5f60718.jpg', caption: 42 },       // junk caption: kept, caption dropped
+        'nope',                                              // not an object: dropped
+      ] },
+      { name: 'Bob', ids: [], story: '   ', photos: 'nope' }, // blank story + junk photos: both dropped
+    ] });
+    assert.deepEqual(saved.users[0].story, 'Loves maps.');
+    assert.deepEqual(saved.users[0].photos, [
+      { file: 'a1b2c3d4e5f60718.jpg', caption: 'At the beach' },
+      { file: 'a1b2c3d4e5f60718.png' },
+      { file: 'a1b2c3d4e5f60718.jpg' },
+    ]);
+    assert.deepEqual(saved.users[1], { name: 'Bob', ids: [], active: true });
+  } finally { fs.rmSync(users.FILE, { force: true }); }
+});

@@ -28,6 +28,19 @@ const SEED = [
   { name: 'Alice',      ids: ['47523947380872@lid'] },
 ];
 
+// Photo files are exactly what POST /api/upload generates — anything else
+// (traversal, foreign paths) is dropped on save.
+const PHOTO_FILE = /^[a-f0-9]{16}\.(jpg|png|webp|gif)$/;
+function cleanPhotos(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((p) => p && typeof p.file === 'string' && PHOTO_FILE.test(p.file))
+    .map((p) => ({
+      file: p.file,
+      ...(typeof p.caption === 'string' && p.caption.trim() ? { caption: p.caption.trim() } : {}),
+    }));
+}
+
 // Coerce arbitrary input into a clean registry: valid names, unique string ids,
 // active defaulting to true.
 function normalize(reg) {
@@ -35,15 +48,21 @@ function normalize(reg) {
   return {
     users: users
       .filter((u) => u && typeof u.name === 'string' && u.name.trim())
-      .map((u) => ({
-        name: u.name.trim(),
-        ids: Array.isArray(u.ids) ? [...new Set(u.ids.filter((x) => typeof x === 'string' && x))] : [],
-        active: u.active !== false,
-        // birth city for the /globe page; keys omitted entirely when unset
-        ...(typeof u.city === 'string' && u.city.trim() ? { city: u.city.trim() } : {}),
-        ...(typeof u.country === 'string' && u.country.trim() ? { country: u.country.trim() } : {}),
-        ...(Number.isFinite(u.lat) && Number.isFinite(u.lng) ? { lat: u.lat, lng: u.lng } : {}),
-      })),
+      .map((u) => {
+        const photos = cleanPhotos(u.photos);
+        return {
+          name: u.name.trim(),
+          ids: Array.isArray(u.ids) ? [...new Set(u.ids.filter((x) => typeof x === 'string' && x))] : [],
+          active: u.active !== false,
+          // birth city for the /globe page; keys omitted entirely when unset
+          ...(typeof u.city === 'string' && u.city.trim() ? { city: u.city.trim() } : {}),
+          ...(typeof u.country === 'string' && u.country.trim() ? { country: u.country.trim() } : {}),
+          ...(Number.isFinite(u.lat) && Number.isFinite(u.lng) ? { lat: u.lat, lng: u.lng } : {}),
+          // people-stories media (photos validated against PHOTO_FILE)
+          ...(typeof u.story === 'string' && u.story.trim() ? { story: u.story.trim() } : {}),
+          ...(photos.length ? { photos } : {}),
+        };
+      }),
   };
 }
 
