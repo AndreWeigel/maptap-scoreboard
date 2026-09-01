@@ -65,6 +65,9 @@ function createApp(db, status) {
     res.json({ file });
   });
 
+  // ---- Custom games (isolated module: src/game/, data/game.db). ----
+  app.use('/game', require('./game/routes')({ basicAuth }));
+
   app.get('/', (_req, res) => {
     res.sendFile(path.join(__dirname, '..', 'views', 'scoreboard.html'));
   });
