@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Game builder</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070b1c; --bg-2: #0a1030; --panel: rgba(16,22,52,.9); --border: rgba(130,155,255,.16);
+    --text: #eaf0ff; --muted: #98a4d4; --cyan: #22d3ee; --red: #f0616a;
+    --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 40px 20px 80px; color: var(--text);
+    font: 15px/1.5 var(--body); background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  a.back { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: .95rem; }
+  a.back:hover { color: var(--cyan); }
+  h1 { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 10px 0 4px; }
+  p.hint { color: var(--muted); font-size: .9rem; margin: 0 0 18px; }
+  .bar { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; position: sticky; top: 0;
+    background: linear-gradient(var(--bg-2), rgba(10,16,48,.6)); padding: 10px 0; z-index: 5; }
+  button { font-family: var(--mono); cursor: pointer; border-radius: 999px; border: 1px solid var(--border);
+    background: rgba(10,14,34,.72); color: var(--text); padding: 8px 16px; font-size: .9rem; transition: background .15s, border-color .15s; }
+  button:hover { border-color: rgba(34,211,238,.4); }
+  button.primary { background: rgba(34,211,238,.15); border-color: rgba(34,211,238,.45); color: var(--cyan); }
+  button.primary:disabled { opacity: .45; cursor: default; }
+  button.sm { padding: 4px 10px; font-size: .8rem; }
+  #status { font-family: var(--mono); font-size: .85rem; color: var(--muted); margin-left: auto; }
+
+  .game { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px; margin-bottom: 10px; }
+  .game .t { font-weight: 700; flex: 1; min-width: 140px; }
+  .game .meta { font: .75rem var(--mono); color: var(--muted); }
+  .empty { color: var(--muted); font-style: italic; }
+
+  .title { font-size: 1.2rem; font-weight: 700; margin: 0 0 4px; cursor: text; }
+  .title:hover { color: var(--cyan); }
+  .share { font: .8rem var(--mono); color: var(--muted); margin: 0 0 16px; overflow-wrap: anywhere; }
+  .round { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 12px; }
+  .round .head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .round .head .n { font: .75rem var(--mono); color: var(--cyan); flex: none; width: 26px; }
+  input[type=text], textarea { background: rgba(10,14,34,.72); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 6px 8px; font: .82rem var(--mono); }
+  input[type=text]:focus, textarea:focus { outline: none; border-color: rgba(34,211,238,.4); }
+  .round .q { flex: 1; min-width: 0; font: 600 .95rem var(--body); }
+  .locrow { display: flex; gap: 6px; margin: 8px 0; position: relative; align-items: center; }
+  .locrow .city { flex: 3; min-width: 0; }
+  .locrow .coords { flex: 2; min-width: 0; }
+  .locrow .geo { flex: none; font: .78rem var(--mono); color: var(--muted); }
+  .sug { position: absolute; top: 100%; left: 0; right: 0; z-index: 6; display: flex; flex-direction: column;
+    background: var(--bg-2); border: 1px solid rgba(34,211,238,.4); border-radius: 10px; overflow: hidden; }
+  .sug button { border: 0; border-radius: 0; text-align: left; font-size: .8rem; padding: 7px 10px; }
+  .sug button:hover { background: rgba(34,211,238,.12); color: var(--cyan); }
+  .phrow { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+  .phrow img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+  .addph { display: inline-flex; align-items: center; justify-content: center; width: 96px; height: 72px; cursor: pointer;
+    border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font: .78rem var(--mono); }
+  .addph:hover { border-color: rgba(34,211,238,.4); color: var(--cyan); }
+  .story { width: 100%; resize: vertical; min-height: 34px; font: .82rem/1.45 var(--body); }
+  .del { border: 0; background: none; color: var(--muted); font-size: 1.05rem; line-height: 1; padding: 2px 4px; }
+  .del:hover { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/admin">← Admin</a>
+  <h1>Game builder</h1>
+  <p class="hint">Create a game, add rounds, share the link on WhatsApp. The link is the invitation —
+    anyone who has it can play.</p>
+  <div class="bar">
+    <button id="new">+ New game</button>
+    <button id="back" hidden>← Games</button>
+    <button id="save" class="primary" hidden disabled>Save</button>
+    <span id="status"></span>
+  </div>
+  <div id="main"></div>
+</div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = (id) => document.getElementById(id);
+let games = [];
+let editing = null; // { game, rounds, dirty }
+
+const fmtCoords = (r) => Number.isFinite(r.lat) ? `${r.lat}, ${r.lng}` : '';
+const setStatus = (t) => { $('status').textContent = t; };
+
+function render() {
+  $('back').hidden = $('save').hidden = !editing;
+  $('new').hidden = !!editing;
+  if (!editing) { renderList(); return; }
+  $('save').disabled = !editing.dirty;
+  setStatus(editing.dirty ? 'Unsaved changes' : '');
+  renderEditor();
+}
+
+function renderList() {
+  setStatus('');
+  $('main').innerHTML = games.length ? games.map((g) => `
+    <div class="game">
+      <span class="t">${esc(g.title)}</span>
+      <span class="meta">${g.rounds} rounds · ${g.plays} plays · ${g.created_at.slice(0, 10)}</span>
+      <button class="sm" data-copy="${esc(g.slug)}">Copy link</button>
+      <button class="sm" data-edit="${g.id}">Edit</button>
+      <button class="del" data-del="${g.id}" title="Delete game">✕</button>
+    </div>`).join('')
+    : '<p class="empty">No games yet — press “+ New game”.</p>';
+}
+
+function renderEditor() {
+  const { game, rounds } = editing;
+  $('main').innerHTML = `
+    <div class="title" id="rename" title="Click to rename">${esc(game.title)}</div>
+    <p class="share">Share link: ${esc(location.origin)}/game/${esc(game.slug)}
+      <button class="sm" data-copy="${esc(game.slug)}">Copy</button></p>
+    ${rounds.map((r, i) => `
+    <div class="round">
+      <div class="head">
+        <span class="n">#${i + 1}</span>
+        <input type="text" class="q" data-q="${i}" placeholder="Question — e.g. Where was Daniel born?" value="${esc(r.question)}">
+        <button class="sm" data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="sm" data-down="${i}" ${i === rounds.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="del" data-delround="${i}" title="Remove round">✕</button>
+      </div>
+      <div class="locrow">
+        <input type="text" class="city" data-city="${i}" placeholder="City — type, then pick from the list"
+          value="${esc([r.city, r.country].filter(Boolean).join(', '))}">
+        <input type="text" class="coords" data-coords="${i}" placeholder="or lat, lng" value="${esc(fmtCoords(r))}">
+        <span class="geo">${Number.isFinite(r.lat) ? '📍' : '⚠'}</span>
+      </div>
+      <div class="phrow">
+        ${r.photo ? `<img src="/uploads/${esc(r.photo)}" alt=""><button class="del" data-delphoto="${i}" title="Remove photo">✕</button>`
+                  : `<label class="addph">+ photo<input type="file" accept="image/*" data-photo="${i}" hidden></label>`}
+      </div>
+      <textarea class="story" data-story="${i}" placeholder="The reveal story — shown after everyone guesses">${esc(r.story || '')}</textarea>
+    </div>`).join('')}
+    <button id="addround">+ Round</button>`;
+}
+
+async function loadList() {
+  games = (await (await fetch('/game/api/admin/games')).json()).games;
+  editing = null;
+  render();
+}
+
+async function openEditor(id) {
+  const d = await (await fetch(`/game/api/admin/games/${id}`)).json();
+  editing = { game: d.game, rounds: d.rounds, dirty: false };
+  render();
+}
+
+function copyLink(slug) {
+  const url = `${location.origin}/game/${slug}`;
+  // clipboard API needs https; on plain http fall back to a copyable prompt
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => setStatus('Link copied'));
+  else prompt('Copy the link:', url);
+}
+
+const main = $('main');
+main.addEventListener('click', async (e) => {
+  const btn = (a) => e.target.closest(`[data-${a}]`)?.dataset[a];
+  const copy = btn('copy');
+  if (copy) return copyLink(copy);
+  const edit = btn('edit');
+  if (edit) return openEditor(edit);
+  const del = btn('del');
+  if (del) {
+    const g = games.find((x) => x.id === +del);
+    if (!confirm(`Delete "${g.title}" and all its rounds and plays? This cannot be undone.`)) return;
+    await fetch(`/game/api/admin/games/${del}`, { method: 'DELETE' });
+    return loadList();
+  }
+  if (!editing) return;
+  if (e.target.id === 'addround') {
+    editing.rounds.push({ question: '', lat: NaN, lng: NaN });
+    editing.dirty = true; return render();
+  }
+  if (e.target.id === 'rename') {
+    const t = (prompt('Game title?', editing.game.title) || '').trim();
+    if (t && t !== editing.game.title) { editing.game.title = t; editing.dirty = true; render(); }
+    return;
+  }
+  const up = btn('up'), down = btn('down'), delround = btn('delround'), delphoto = btn('delphoto');
+  const swap = (i, j) => { const r = editing.rounds; [r[i], r[j]] = [r[j], r[i]]; editing.dirty = true; render(); };
+  if (up !== undefined) return swap(+up, +up - 1);
+  if (down !== undefined) return swap(+down, +down + 1);
+  if (delround !== undefined) { editing.rounds.splice(+delround, 1); editing.dirty = true; return render(); }
+  if (delphoto !== undefined) { delete editing.rounds[+delphoto].photo; editing.dirty = true; return render(); }
+});
+
+main.addEventListener('change', async (e) => {
+  if (!editing) return;
+  const val = (a) => { const el = e.target.closest(`[data-${a}]`); return el ? [+el.dataset[a], el] : [null, null]; };
+  let [i, el] = val('q');
+  if (el) { editing.rounds[i].question = el.value; editing.dirty = true; return render(); }
+  [i, el] = val('story');
+  if (el) { editing.rounds[i].story = el.value; editing.dirty = true; return render(); }
+  [i, el] = val('coords');
+  if (el) {
+    const r = editing.rounds[i];
+    const m = el.value.trim().match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+    delete r.city; delete r.country;
+    if (m) { r.lat = +m[1]; r.lng = +m[2]; } else { r.lat = NaN; r.lng = NaN; }
+    editing.dirty = true; return render();
+  }
+  [i, el] = val('photo');
+  if (el && el.files[0]) {
+    const f = el.files[0], r = editing.rounds[i];
+    try {
+      const resp = await fetch('/api/upload', { method: 'POST', headers: { 'content-type': f.type }, body: f });
+      if (!resp.ok) throw new Error(resp.status);
+      r.photo = (await resp.json()).file;
+      editing.dirty = true; render();
+    } catch { alert('Upload failed — jpeg/png/webp/gif up to 8 MB.'); }
+    return;
+  }
+  [i, el] = val('city');
+  if (!el) return;
+  const r = editing.rounds[i];
+  const q = el.value.trim();
+  delete r.city; delete r.country; r.lat = NaN; r.lng = NaN;
+  editing.dirty = true;
+  if (!q) return render();
+  r.city = q; // fallback: raw text with ⚠ until a suggestion is picked
+  let hits = [];
+  try {
+    const resp = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1'
+      + `&accept-language=en&limit=5&q=${encodeURIComponent(q)}`);
+    hits = await resp.json();
+  } catch {} // offline/rate-limited: ⚠ shows, retype later to retry
+  if (!hits.length) return render();
+  const sug = document.createElement('div');
+  sug.className = 'sug';
+  for (const h of hits) {
+    const a = h.address || {};
+    const city = a.city || a.town || a.village || a.hamlet || a.municipality || h.name || q;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = [city, a.state, a.country].filter(Boolean).join(', ');
+    b.onclick = () => {
+      r.city = city;
+      if (a.country) r.country = a.country;
+      r.lat = +h.lat; r.lng = +h.lon;
+      render();
+    };
+    sug.appendChild(b);
+  }
+  el.closest('.locrow').appendChild(sug);
+});
+// Click anywhere else: dismiss open suggestion lists.
+document.addEventListener('click', (e) => {
+  if (document.querySelector('.sug') && !e.target.closest('.sug')) render();
+});
+
+$('new').addEventListener('click', async () => {
+  const title = (prompt('Game title? — e.g. Daniel’s 30th') || '').trim();
+  if (!title) return;
+  const g = await (await fetch('/game/api/admin/games', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }),
+  })).json();
+  openEditor(g.id);
+});
+
+$('back').addEventListener('click', () => {
+  if (editing.dirty && !confirm('Discard unsaved changes?')) return;
+  loadList();
+});
+
+$('save').addEventListener('click', async () => {
+  const bad = editing.rounds.findIndex((r) => !r.question.trim() || !Number.isFinite(r.lat));
+  if (bad !== -1) return alert(`Round #${bad + 1} needs a question and a location before saving.`);
+  $('save').disabled = true;
+  setStatus('Saving…');
+  try {
+    const resp = await fetch(`/game/api/admin/games/${editing.game.id}`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: editing.game.title, rounds: editing.rounds }),
+    });
+    if (!resp.ok) throw new Error(resp.status);
+    const d = await resp.json();
+    editing = { game: d.game, rounds: d.rounds, dirty: false };
+    render();
+    setStatus('Saved ' + new Date().toLocaleTimeString());
+  } catch { setStatus('Save failed — try again'); $('save').disabled = false; }
+});
+
+window.addEventListener('beforeunload', (e) => {
+  if (editing && editing.dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+loadList().catch(() => { $('main').textContent = 'Could not load games.'; });
+</script>
+</body>
+</html>
