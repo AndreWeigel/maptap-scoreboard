@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   lat      REAL NOT NULL,
   lng      REAL NOT NULL,
   city     TEXT, country TEXT, photo TEXT, story TEXT,
+  answer   TEXT, radius REAL,
   UNIQUE(game_id, ord)
 );
 CREATE TABLE IF NOT EXISTS plays (
@@ -47,10 +48,15 @@ function openGameDb(dbPath) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  // Files created before 2026-09-01 lack the trivia columns; CREATE IF NOT
+  // EXISTS won't touch them, so bring them up with ALTERs.
+  const cols = db.prepare('PRAGMA table_info(rounds)').all().map((c) => c.name);
+  if (!cols.includes('answer')) db.exec('ALTER TABLE rounds ADD COLUMN answer TEXT');
+  if (!cols.includes('radius')) db.exec('ALTER TABLE rounds ADD COLUMN radius REAL');
 
   const insertRound = db.prepare(`
-    INSERT INTO rounds (game_id, ord, question, lat, lng, city, country, photo, story)
-    VALUES (@game_id, @ord, @question, @lat, @lng, @city, @country, @photo, @story)
+    INSERT INTO rounds (game_id, ord, question, lat, lng, city, country, photo, story, answer, radius)
+    VALUES (@game_id, @ord, @question, @lat, @lng, @city, @country, @photo, @story, @answer, @radius)
   `);
   const replaceRounds = db.transaction((id, title, rounds) => {
     db.prepare('UPDATE games SET title = ? WHERE id = ?').run(title, id);
@@ -58,6 +64,7 @@ function openGameDb(dbPath) {
     rounds.forEach((r, ord) => insertRound.run({
       game_id: id, ord, question: r.question, lat: r.lat, lng: r.lng,
       city: r.city ?? null, country: r.country ?? null, photo: r.photo ?? null, story: r.story ?? null,
+      answer: r.answer ?? null, radius: r.radius ?? null,
     }));
   });
 

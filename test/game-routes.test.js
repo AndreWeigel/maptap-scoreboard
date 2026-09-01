@@ -34,12 +34,17 @@ test('create → update rounds → fetch round-trip; share slug resolves', async
       method: 'PUT', headers: json,
       body: JSON.stringify({ title: g.title, rounds: [
         { question: ' Born? ', lat: 38.57, lng: -7.9, city: 'Évora', story: ' s ', photo: 'a1b2c3d4e5f60718.jpg' },
-        { question: 'Studied?', lat: 41.15, lng: -8.61 },
+        { question: 'Highest railway station?', lat: 33.0106, lng: 91.6642,
+          answer: ' Tanggula, Qinghai–Tibet Railway, China ', radius: 20 },
       ] }),
     });
     assert.equal(put.status, 200);
     const { rounds } = await (await fetch(`${base}/game/api/admin/games/${g.id}`, { headers: auth })).json();
-    assert.deepEqual(rounds.map((r) => [r.ord, r.question]), [[0, 'Born?'], [1, 'Studied?']]);
+    assert.deepEqual(rounds.map((r) => [r.ord, r.question]),
+      [[0, 'Born?'], [1, 'Highest railway station?']]);
+    assert.equal(rounds[1].answer, 'Tanggula, Qinghai–Tibet Railway, China');
+    assert.equal(rounds[1].radius, 20);
+    assert.equal(rounds[0].radius, null);
 
     const play = await fetch(`${base}/game/${g.slug}`);
     assert.equal(play.status, 200);
@@ -58,6 +63,9 @@ test('PUT rejects invalid rounds with 400', async () => {
       { question: 'q', lat: 91, lng: 2 },                     // lat out of range
       { question: 'q', lat: 1, lng: '2' },                    // non-numeric lng
       { question: 'q', lat: 1, lng: 2, photo: '../etc/pwd' }, // bad photo name
+      { question: 'q', lat: 1, lng: 2, radius: -5 },          // negative radius
+      { question: 'q', lat: 1, lng: 2, radius: 'x' },         // non-numeric radius
+      { question: 'q', lat: 1, lng: 2, radius: 20001 },       // absurd radius
     ]) {
       const r = await fetch(`${base}/game/api/admin/games/${g.id}`, {
         method: 'PUT', headers: json, body: JSON.stringify({ title: 't', rounds: [bad] }),
