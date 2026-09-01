@@ -56,6 +56,10 @@
     background: var(--bg-2); border: 1px solid rgba(34,211,238,.4); border-radius: 10px; overflow: hidden; }
   .sug button { border: 0; border-radius: 0; text-align: left; font-size: .8rem; padding: 7px 10px; }
   .sug button:hover { background: rgba(34,211,238,.12); color: var(--cyan); }
+  .ansrow { display: flex; gap: 6px; margin: 8px 0; align-items: center; }
+  .ansrow .answer { flex: 1; min-width: 0; }
+  .ansrow .radius { width: 64px; text-align: right; }
+  .ansrow .unit { font: .78rem var(--mono); color: var(--muted); }
   .phrow { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
   .phrow img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
   .addph { display: inline-flex; align-items: center; justify-content: center; width: 96px; height: 72px; cursor: pointer;
@@ -148,6 +152,13 @@ function renderEditor() {
         <input type="text" class="coords" data-coords="${i}" placeholder="or lat, lng" value="${esc(fmtCoords(r))}">
         <button class="sm" data-mappick="${i}" title="Pick the spot on a map">🗺</button>
         <span class="geo">${Number.isFinite(r.lat) ? '📍' : '⚠'}</span>
+      </div>
+      <div class="ansrow">
+        <input type="text" class="answer" data-answer="${i}" value="${esc(r.answer || '')}"
+          placeholder="Answer label for the reveal (optional) — e.g. Tanggula, Qinghai–Tibet Railway, China">
+        <input type="text" class="radius" data-radius="${i}" value="${esc(r.radius ?? '')}"
+          placeholder="±25" title="Full points within this many km of the pin">
+        <span class="unit">km</span>
       </div>
       <div class="phrow">
         ${r.photo ? `<img src="/uploads/${esc(r.photo)}" alt=""><button class="del" data-delphoto="${i}" title="Remove photo">✕</button>`
@@ -261,6 +272,18 @@ main.addEventListener('change', async (e) => {
   if (el) { editing.rounds[i].question = el.value; editing.dirty = true; return render(); }
   [i, el] = val('story');
   if (el) { editing.rounds[i].story = el.value; editing.dirty = true; return render(); }
+  [i, el] = val('answer');
+  if (el) {
+    const r = editing.rounds[i];
+    if (el.value.trim()) r.answer = el.value; else delete r.answer;
+    editing.dirty = true; return render();
+  }
+  [i, el] = val('radius');
+  if (el) {
+    const r = editing.rounds[i], v = parseFloat(el.value);
+    if (Number.isFinite(v) && v > 0) r.radius = v; else delete r.radius;
+    editing.dirty = true; return render();
+  }
   [i, el] = val('coords');
   if (el) {
     const r = editing.rounds[i];
