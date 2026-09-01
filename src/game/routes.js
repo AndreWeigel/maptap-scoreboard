@@ -20,10 +20,13 @@ function cleanRound(r) {
   if (!Number.isFinite(r.lat) || Math.abs(r.lat) > 90) return null;
   if (!Number.isFinite(r.lng) || Math.abs(r.lng) > 180) return null;
   if (r.photo != null && !PHOTO_FILE.test(r.photo)) return null;
+  // radius: optional "full points within this many km" tolerance (trivia rounds)
+  if (r.radius != null && !(Number.isFinite(r.radius) && r.radius > 0 && r.radius <= 10000)) return null;
   return {
     question, lat: r.lat, lng: r.lng,
     city: optStr(r.city), country: optStr(r.country),
     photo: r.photo || undefined, story: optStr(r.story),
+    answer: optStr(r.answer), radius: r.radius ?? undefined,
   };
 }
 

@@ -15,10 +15,17 @@ and land on a per-game leaderboard. No live sync; play whenever.
 ## Decisions pinned here (handover left them open)
 
 - **Scoring** (`src/game/scoring.js`, slice 3): per round
-  `points(km) = km <= 25 ? 100 : Math.round(100 * Math.exp(-(km - 25) / 500))`
-  — perfect zone under 25 km, smooth decay after (≈82 at 125 km, ≈38 at
-  500 km, ≈14 at 1000 km). Distance via haversine (own ~8-line function,
-  same file). Both covered by tests. 5 rounds ≈ 500 max, like the scoreboard.
+  `points(km, radius = 25) = km <= radius ? 100 : Math.round(100 * Math.exp(-(km - radius) / 500))`
+  — full points inside the round's perfect zone, smooth decay after
+  (with radius 25: ≈82 at 125 km, ≈38 at 500 km, ≈14 at 1000 km). `radius`
+  is the round's optional tolerance in km (trivia rounds like "highest
+  railway station, ~20 km" set it; unset means 25). Distance via haversine
+  (own ~8-line function, same file). Both covered by tests. 5 rounds ≈ 500
+  max, like the scoreboard.
+- **Answer label** (added 2026-09-01): a round may carry free-text `answer`
+  (e.g. "Tanggula, Qinghai–Tibet Railway, China") shown on the reveal;
+  falls back to `city · country` when unset. Independent of the city picker
+  so a trivia label survives coords/map edits.
 - **Slug**: `crypto.randomBytes(8).toString('hex')` (16 chars). The link IS
   the access control for playing.
 - **Replays**: blocked. `UNIQUE(game_id, player_name COLLATE NOCASE)` on
@@ -48,6 +55,7 @@ rounds  (id INTEGER PK, game_id INT NOT NULL REFERENCES games ON DELETE CASCADE,
          ord INTEGER NOT NULL, question TEXT NOT NULL,
          lat REAL NOT NULL, lng REAL NOT NULL,
          city TEXT, country TEXT, photo TEXT, story TEXT,
+         answer TEXT, radius REAL,  -- added 2026-09-01; openGameDb ALTERs older files
          UNIQUE(game_id, ord));
 plays   (id INTEGER PK, game_id INT NOT NULL REFERENCES games ON DELETE CASCADE,
          player_name TEXT NOT NULL, total INTEGER NOT NULL,
@@ -76,9 +84,10 @@ Public:
 
 Round validation at the PUT boundary: `question` non-empty trimmed string;
 `lat` finite in [-90, 90], `lng` finite in [-180, 180]; `city`/`country`/
-`story` optional trimmed strings; `photo` optional, must match
-`^[a-f0-9]{16}\.(jpg|png|webp|gif)$`. `ord` is assigned server-side from
-array order (0-based) — the client never sends it.
+`story`/`answer` optional trimmed strings; `photo` optional, must match
+`^[a-f0-9]{16}\.(jpg|png|webp|gif)$`; `radius` optional, finite km in
+(0, 10000]. `ord` is assigned server-side from array order (0-based) — the
+client never sends it.
 
 ## Builder page (`views/game/builder.html`, slice 2)
 

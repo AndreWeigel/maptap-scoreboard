@@ -1,8 +1,53 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { openGameDb } = require('../src/game/db');
 
 const round = (q, lat, lng, extra = {}) => ({ question: q, lat, lng, ...extra });
+
+test('rounds keep answer + radius (trivia rounds)', () => {
+  const db = openGameDb(':memory:');
+  const g = db.createGame('trivia');
+  db.saveGame(g.id, 'trivia', [
+    round('Highest railway station?', 33.0106, 91.6642,
+      { answer: 'Tanggula, Qinghai–Tibet Railway, China', radius: 20 }),
+    round('Born?', 38.57, -7.9),
+  ]);
+  const { rounds } = db.getGame(g.id);
+  assert.equal(rounds[0].answer, 'Tanggula, Qinghai–Tibet Railway, China');
+  assert.equal(rounds[0].radius, 20);
+  assert.equal(rounds[1].answer, null);
+  assert.equal(rounds[1].radius, null);
+});
+
+test('openGameDb migrates a pre-answer/radius db file in place', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gamedb-'));
+  const file = path.join(dir, 'game.db');
+  try {
+    // Build a slice-2-era file: same schema minus answer/radius.
+    const Database = require('better-sqlite3');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE games (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE TABLE rounds (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+        ord INTEGER NOT NULL, question TEXT NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL,
+        city TEXT, country TEXT, photo TEXT, story TEXT, UNIQUE(game_id, ord));
+      INSERT INTO games (slug, title, created_at) VALUES ('aaaabbbbccccdddd', 'old', 'now');
+      INSERT INTO rounds (game_id, ord, question, lat, lng) VALUES (1, 0, 'q', 1, 2);
+    `);
+    old.close();
+    const db = openGameDb(file);
+    const { rounds } = db.getGame(1); // old row still there, new columns null
+    assert.equal(rounds[0].question, 'q');
+    assert.equal(rounds[0].radius, null);
+    db.saveGame(1, 'old', [round('q2', 1, 2, { radius: 5, answer: 'x' })]);
+    assert.equal(db.getGame(1).rounds[0].radius, 5);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('createGame: random 16-hex slug, listed with zero counts', () => {
   const db = openGameDb(':memory:');
