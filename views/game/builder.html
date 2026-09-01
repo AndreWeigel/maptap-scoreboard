@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MapTap · Game builder</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.css">
 <style>
   :root {
     color-scheme: dark;
@@ -63,6 +64,16 @@
   .story { width: 100%; resize: vertical; min-height: 34px; font: .82rem/1.45 var(--body); }
   .del { border: 0; background: none; color: var(--muted); font-size: 1.05rem; line-height: 1; padding: 2px 4px; }
   .del:hover { color: var(--red); }
+
+  #mapmodal { position: fixed; inset: 0; z-index: 20; background: var(--bg); }
+  #mapmodal[hidden] { display: none; }
+  #pickmap { position: absolute; inset: 0; }
+  .maphint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font: .8rem var(--mono);
+    color: var(--text); pointer-events: none; white-space: nowrap; }
+  #mapclose { position: absolute; top: 10px; right: 10px; z-index: 21; }
+  .mapcredit { position: absolute; right: 8px; bottom: 6px; color: rgba(152,164,212,.7);
+    font: .65rem var(--mono); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -78,6 +89,12 @@
     <span id="status"></span>
   </div>
   <div id="main"></div>
+</div>
+<div id="mapmodal" hidden>
+  <div id="pickmap"></div>
+  <div class="maphint">Tap the secret spot — zoom in for precision</div>
+  <button id="mapclose">✕</button>
+  <div class="mapcredit">Imagery © Esri &amp; contributors</div>
 </div>
 <script>
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -129,6 +146,7 @@ function renderEditor() {
         <input type="text" class="city" data-city="${i}" placeholder="City — type, then pick from the list"
           value="${esc([r.city, r.country].filter(Boolean).join(', '))}">
         <input type="text" class="coords" data-coords="${i}" placeholder="or lat, lng" value="${esc(fmtCoords(r))}">
+        <button class="sm" data-mappick="${i}" title="Pick the spot on a map">🗺</button>
         <span class="geo">${Number.isFinite(r.lat) ? '📍' : '⚠'}</span>
       </div>
       <div class="phrow">
@@ -159,6 +177,49 @@ function copyLink(slug) {
   else prompt('Copy the link:', url);
 }
 
+// Full-screen click-to-pick map. MapLibre loads lazily on first open (~1MB —
+// only game builders pay for it, and only if they use the map).
+let pickmap = null, pickIdx = null;
+async function openMapPicker(i) {
+  pickIdx = i;
+  $('mapmodal').hidden = false;
+  if (!pickmap) {
+    const maplibregl = await import('https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs');
+    pickmap = new maplibregl.Map({
+      container: 'pickmap',
+      attributionControl: false, // .mapcredit carries the Esri notice
+      minZoom: 1, maxZoom: 17, center: [10, 35], zoom: 1.5,
+      style: { version: 8,
+        sources: { sat: { type: 'raster', tileSize: 256, maxzoom: 17,
+          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] } },
+        layers: [{ id: 'sat', type: 'raster', source: 'sat' }] },
+    });
+    window.pickmap = pickmap; // console/debug handle (screenshot driver uses it)
+    pickmap.on('click', async (e) => {
+      const r = editing && editing.rounds[pickIdx];
+      if (!r) return;
+      r.lat = +e.lngLat.lat.toFixed(5);
+      r.lng = +e.lngLat.wrap().lng.toFixed(5);
+      delete r.city; delete r.country;
+      editing.dirty = true;
+      $('mapmodal').hidden = true;
+      render();
+      try { // best-effort city label for the reveal; the coords are already set
+        const resp = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2'
+          + `&accept-language=en&zoom=10&lat=${r.lat}&lon=${r.lng}`);
+        const a = (await resp.json()).address || {};
+        const city = a.city || a.town || a.village || a.hamlet || a.municipality || a.county;
+        if (city) { r.city = city; if (a.country) r.country = a.country; render(); }
+      } catch {}
+    });
+  }
+  const r = editing.rounds[i];
+  if (Number.isFinite(r.lat)) pickmap.jumpTo({ center: [r.lng, r.lat], zoom: 8 });
+  pickmap.resize(); // the container was display:none when the map last measured itself
+}
+$('mapclose').addEventListener('click', () => { $('mapmodal').hidden = true; });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('mapmodal').hidden = true; });
+
 const main = $('main');
 main.addEventListener('click', async (e) => {
   const btn = (a) => e.target.closest(`[data-${a}]`)?.dataset[a];
@@ -183,6 +244,8 @@ main.addEventListener('click', async (e) => {
     if (t && t !== editing.game.title) { editing.game.title = t; editing.dirty = true; render(); }
     return;
   }
+  const mappick = btn('mappick');
+  if (mappick !== undefined) return openMapPicker(+mappick);
   const up = btn('up'), down = btn('down'), delround = btn('delround'), delphoto = btn('delphoto');
   const swap = (i, j) => { const r = editing.rounds; [r[i], r[j]] = [r[j], r[i]]; editing.dirty = true; render(); };
   if (up !== undefined) return swap(+up, +up - 1);
