@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Play</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.css">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070b1c; --bg-2: #0a1030; --panel: rgba(16,22,52,.92); --border: rgba(130,155,255,.16);
+    --text: #eaf0ff; --muted: #98a4d4; --cyan: #22d3ee; --gold: #ffd15c;
+    --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; color: var(--text); font: 15px/1.5 var(--body);
+    background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
+  #map { position: fixed; inset: 0; }
+  .credit { position: fixed; right: 8px; bottom: 6px; z-index: 3; color: rgba(152,164,212,.55);
+    font: .65rem var(--mono); pointer-events: none; }
+
+  .top { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4;
+    width: min(560px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 10px 16px; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+  .top .t { font: .7rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--cyan); }
+  .top .q { font: 600 1.02rem/1.4 var(--body); }
+  .top .q .rno { color: var(--muted); font: .8rem var(--mono); margin-right: 8px; }
+  .top .hint { font: .75rem var(--mono); color: var(--muted); }
+
+  #action { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 5;
+    font: 700 1rem var(--body); cursor: pointer; border-radius: 999px; padding: 12px 30px;
+    border: 1px solid rgba(34,211,238,.5); background: rgba(11,50,64,.92); color: var(--cyan);
+    box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  #action:hover { background: rgba(34,211,238,.25); }
+  #action[hidden] { display: none; }
+
+  .ov { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+    background: rgba(7,11,28,.7); backdrop-filter: blur(3px); padding: 16px; }
+  .ov[hidden] { display: none; }
+  .ov .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+    padding: 26px 28px; width: min(420px, 100%); max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,.6); text-align: center; }
+  .ov h1 { font: 1.15rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--cyan); margin: 0 0 8px; }
+  .ov p { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+  .ov input { width: 100%; background: rgba(10,14,34,.72); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font: 1rem var(--body); padding: 10px 12px; text-align: center; margin-bottom: 14px; }
+  .ov input:focus { outline: none; border-color: rgba(34,211,238,.4); }
+  .ov button { font: 700 .95rem var(--body); cursor: pointer; border-radius: 999px; padding: 10px 28px;
+    border: 1px solid rgba(34,211,238,.5); background: rgba(34,211,238,.15); color: var(--cyan); }
+  .ov table { width: 100%; border-collapse: collapse; font-size: .92rem; text-align: left; }
+  .ov td { padding: 6px 4px; border-top: 1px solid var(--border); }
+  .ov td.pts { text-align: right; font-family: var(--mono); }
+  .ov tr.me td { color: var(--gold); font-weight: 700; }
+  .ov .total { font: 2rem var(--mono); color: var(--gold); margin: 4px 0 14px; }
+
+  #reveal { position: fixed; top: 86px; right: 14px; z-index: 4; width: min(320px, calc(100vw - 28px));
+    max-height: calc(100vh - 170px); overflow-y: auto; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  #reveal[hidden] { display: none; }
+  #reveal .pts { font: 2rem var(--mono); color: var(--gold); }
+  #reveal .km { font: .8rem var(--mono); color: var(--muted); margin-bottom: 8px; }
+  #reveal .ans { font-weight: 700; margin-bottom: 8px; }
+  #reveal img { width: 100%; border-radius: 10px; border: 1px solid var(--border); display: block; margin-bottom: 4px; }
+  #reveal .story { font-size: .88rem; white-space: pre-wrap; color: var(--text); }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="top">
+  <div class="t" id="gtitle">MapTap</div>
+  <div class="q"><span class="rno" id="rno"></span><span id="question">Loading…</span></div>
+  <div class="hint" id="hint"></div>
+</div>
+<button id="action" hidden></button>
+<div id="reveal" hidden></div>
+<div class="ov" id="nameov" hidden><div class="card">
+  <h1 id="wtitle">MapTap</h1>
+  <p>Tap the globe where you think the answer is. Closer tap, more points. Type your name — it goes on the leaderboard.</p>
+  <input id="pname" maxlength="40" placeholder="Your name" autocomplete="off">
+  <button id="start">Play</button>
+</div></div>
+<div class="ov" id="endov" hidden><div class="card">
+  <h1 id="endtitle"></h1>
+  <div class="total" id="endtotal"></div>
+  <table id="board"></table>
+</div></div>
+<div class="credit">Imagery © Esri &amp; contributors · MapLibre</div>
+<script type="module">
+import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs';
+
+const $ = (id) => document.getElementById(id);
+const slug = location.pathname.split('/').filter(Boolean).pop();
+const api = (p, opts) => fetch(`/game/api/${slug}${p}`, opts);
+
+const map = new maplibregl.Map({
+  container: 'map',
+  attributionControl: false, // the .credit line carries the Esri notice
+  minZoom: 1, maxZoom: 17, center: [10, 25], zoom: 1.6,
+  style: { version: 8,
+    projection: { type: 'globe' },
+    sources: { sat: { type: 'raster', tileSize: 256, maxzoom: 17,
+      attribution: 'Imagery © Esri & contributors',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] } },
+    layers: [{ id: 'sat', type: 'raster', source: 'sat' }],
+    sky: { 'sky-color': '#02040f', 'horizon-color': '#0e5d7a', 'fog-color': '#070b1c',
+      'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6,
+      'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 6, 1, 8, 0.1] } },
+});
+window.map = map; // console/debug handle
+
+let game = null, ord = 0, guesses = [], marker = null, phase = 'load'; // load|name|guess|reveal|done
+let playerName = '';
+try { playerName = localStorage.getItem('maptap:player') || ''; } catch {}
+
+const EMPTY = { type: 'FeatureCollection', features: [] };
+map.on('load', () => {
+  map.addSource('truth', { type: 'geojson', data: EMPTY });
+  map.addSource('line', { type: 'geojson', data: EMPTY });
+  map.addLayer({ id: 'line', type: 'line', source: 'line',
+    paint: { 'line-color': '#22d3ee', 'line-width': 2, 'line-dasharray': [1.5, 1.5] } });
+  map.addLayer({ id: 'truth', type: 'circle', source: 'truth',
+    paint: { 'circle-radius': 6, 'circle-color': '#ffd15c', 'circle-stroke-color': '#070b1c', 'circle-stroke-width': 2 } });
+});
+
+function setBanner(question, hint) {
+  $('rno').textContent = game ? `${ord + 1}/${game.rounds.length}` : '';
+  $('question').textContent = question;
+  $('hint').textContent = hint || '';
+}
+
+function startRound() {
+  phase = 'guess';
+  if (marker) { marker.remove(); marker = null; }
+  const setEmpty = () => { map.getSource('truth').setData(EMPTY); map.getSource('line').setData(EMPTY); };
+  if (map.loaded()) setEmpty(); else map.once('load', setEmpty);
+  $('reveal').hidden = true;
+  $('action').hidden = true;
+  setBanner(game.rounds[ord].question, 'tap the globe to drop your pin');
+}
+
+function place(lat, lng) {
+  if (phase !== 'guess') return;
+  if (!marker) marker = new maplibregl.Marker({ draggable: true, color: '#22d3ee' }).setLngLat([lng, lat]).addTo(map);
+  else marker.setLngLat([lng, lat]);
+  $('action').textContent = 'Confirm guess';
+  $('action').hidden = false;
+  $('hint').textContent = 'drag the pin to adjust, then confirm';
+}
+map.on('click', (e) => place(e.lngLat.lat, e.lngLat.wrap().lng));
+
+// Reveal card is untrusted server/user text — createElement/textContent only.
+function showReveal(r) {
+  const box = $('reveal');
+  box.replaceChildren();
+  const add = (tag, cls, text) => {
+    const el = document.createElement(tag);
+    el.className = cls; el.textContent = text;
+    box.appendChild(el); return el;
+  };
+  add('div', 'pts', `+${r.points} pts`);
+  add('div', 'km', `${r.km} km away`);
+  const label = r.truth.answer || [r.truth.city, r.truth.country].filter(Boolean).join(' · ');
+  if (label) add('div', 'ans', `📍 ${label}`);
+  if (r.truth.photo) {
+    const img = document.createElement('img');
+    img.src = `/uploads/${r.truth.photo}`; img.alt = label || 'photo'; img.loading = 'lazy';
+    box.appendChild(img);
+  }
+  if (r.truth.story) add('div', 'story', r.truth.story);
+  box.hidden = false;
+}
+
+async function confirmGuess() {
+  if (phase !== 'guess' || !marker) return;
+  phase = 'reveal';
+  $('action').hidden = true;
+  const { lat, lng } = marker.getLngLat().wrap();
+  let r;
+  try {
+    const resp = await api('/guess', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ord: game.rounds[ord].ord, lat, lng }) });
+    if (!resp.ok) throw new Error(resp.status);
+    r = await resp.json();
+  } catch { phase = 'guess'; $('action').hidden = false; $('hint').textContent = 'network hiccup — try confirm again'; return; }
+  guesses.push({ ord: game.rounds[ord].ord, lat, lng });
+  const truthPt = { type: 'Feature', geometry: { type: 'Point', coordinates: [r.truth.lng, r.truth.lat] } };
+  map.getSource('truth').setData(truthPt);
+  map.getSource('line').setData({ type: 'Feature', geometry: {
+    type: 'LineString', coordinates: [[lng, lat], [r.truth.lng, r.truth.lat]] } });
+  map.fitBounds(new maplibregl.LngLatBounds([lng, lat], [lng, lat]).extend([r.truth.lng, r.truth.lat]),
+    { padding: 90, maxZoom: 9, duration: 1200 });
+  showReveal(r);
+  setBanner(game.rounds[ord].question, '');
+  const last = ord === game.rounds.length - 1;
+  $('action').textContent = last ? 'See results' : 'Next round';
+  $('action').hidden = false;
+}
+
+function nextRound() {
+  if (phase !== 'reveal') return;
+  if (ord < game.rounds.length - 1) { ord += 1; startRound(); }
+  else finish();
+}
+
+function showBoard(title, total, leaderboard) {
+  phase = 'done';
+  $('reveal').hidden = true;
+  $('action').hidden = true;
+  $('endtitle').textContent = title;
+  $('endtotal').textContent = total == null ? '' : `${total} pts`;
+  const rows = (leaderboard || []).map((p, i) => {
+    const tr = document.createElement('tr');
+    if (p.player_name.toLowerCase() === playerName.toLowerCase()) tr.className = 'me';
+    for (const [cls, text] of [['', `${i + 1}.`], ['', p.player_name], ['pts', `${p.total} pts`]]) {
+      const td = document.createElement('td');
+      td.className = cls; td.textContent = text;
+      tr.appendChild(td);
+    }
+    return tr;
+  });
+  $('board').replaceChildren(...rows);
+  $('endov').hidden = false;
+}
+
+async function finish() {
+  setBanner('Adding you to the leaderboard…', '');
+  let resp;
+  try {
+    resp = await api('/plays', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ player_name: playerName, guesses }) });
+  } catch { phase = 'reveal'; $('action').hidden = false; $('hint').textContent = 'network hiccup — try again'; return; }
+  const d = await resp.json();
+  if (resp.status === 409) showBoard(`${playerName}, you already played this one`, null, d.leaderboard);
+  else showBoard(game.title, d.total, d.leaderboard);
+}
+
+$('action').addEventListener('click', () => (phase === 'guess' ? confirmGuess() : nextRound()));
+$('start').addEventListener('click', () => {
+  const name = $('pname').value.trim();
+  if (!name) return $('pname').focus();
+  playerName = name;
+  try { localStorage.setItem('maptap:player', name); } catch {}
+  $('nameov').hidden = true;
+  startRound();
+});
+$('pname').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('start').click(); });
+
+window.playState = { place, confirm: confirmGuess, next: nextRound }; // debug/driver handle
+
+(async () => {
+  try {
+    const resp = await api('');
+    if (!resp.ok) throw new Error(resp.status);
+    game = await resp.json();
+  } catch { setBanner('Could not load this game.', 'check the link'); return; }
+  document.title = `MapTap · ${game.title}`;
+  $('gtitle').textContent = game.title;
+  $('wtitle').textContent = game.title;
+  if (!game.rounds.length) { setBanner('This game has no rounds yet.', ''); return; }
+  phase = 'name';
+  setBanner('Ready?', '');
+  $('pname').value = playerName;
+  $('nameov').hidden = false;
+})();
+</script>
+</body>
+</html>

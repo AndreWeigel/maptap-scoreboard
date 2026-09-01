@@ -58,6 +58,17 @@ function openGameDb(dbPath) {
     INSERT INTO rounds (game_id, ord, question, lat, lng, city, country, photo, story, answer, radius)
     VALUES (@game_id, @ord, @question, @lat, @lng, @city, @country, @photo, @story, @answer, @radius)
   `);
+  const insertGuess = db.prepare(`
+    INSERT INTO guesses (play_id, round_ord, lat, lng, km, points)
+    VALUES (@play_id, @round_ord, @lat, @lng, @km, @points)
+  `);
+  const insertPlay = db.transaction((gameId, playerName, total, guesses) => {
+    const { lastInsertRowid } = db.prepare(
+      'INSERT INTO plays (game_id, player_name, total, created_at) VALUES (?, ?, ?, ?)'
+    ).run(gameId, playerName, total, new Date().toISOString());
+    for (const g of guesses) insertGuess.run({ play_id: lastInsertRowid, ...g });
+    return { id: lastInsertRowid };
+  });
   const replaceRounds = db.transaction((id, title, rounds) => {
     db.prepare('UPDATE games SET title = ? WHERE id = ?').run(title, id);
     db.prepare('DELETE FROM rounds WHERE game_id = ?').run(id);
@@ -101,6 +112,23 @@ function openGameDb(dbPath) {
 
     deleteGame(id) {
       return { deleted: db.prepare('DELETE FROM games WHERE id = ?').run(id).changes > 0 };
+    },
+
+    getGameBySlug(slug) {
+      const game = db.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
+      return game ? this.getGame(game.id) : null;
+    },
+
+    // guesses: [{ round_ord, lat, lng, km, points }] — one transaction with the
+    // play row; throws SQLITE_CONSTRAINT on a duplicate (game, name) pair.
+    recordPlay(gameId, playerName, total, guesses) {
+      return insertPlay(gameId, playerName, total, guesses);
+    },
+
+    listPlays(gameId) {
+      return db.prepare(
+        'SELECT player_name, total, created_at FROM plays WHERE game_id = ? ORDER BY total DESC, created_at'
+      ).all(gameId);
     },
   };
 }
