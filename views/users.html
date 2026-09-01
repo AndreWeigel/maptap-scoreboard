@@ -45,14 +45,15 @@
     background: rgba(20,26,60,.9); border: 1px solid var(--border); border-radius: 9px; padding: 5px 9px; max-width: 100%; }
   .chip:active { cursor: grabbing; }
   .chip .who { font-size: .85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chip .meta { font-family: var(--mono); font-size: .68rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .meta { font-family: var(--mono); font-size: .75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chip.dragging { opacity: .4; }
 
   .sw { position: relative; width: 44px; height: 24px; flex: none; padding: 0; border-radius: 999px; border: 1px solid var(--border); background: rgba(10,14,34,.72); }
   .sw[aria-checked="true"] { background: rgba(74,222,128,.25); border-color: rgba(74,222,128,.5); }
   .sw::after { content: ""; position: absolute; top: 50%; left: 3px; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%; background: #cdd8ee; transition: left .18s, background .18s; }
   .sw[aria-checked="true"]::after { left: 23px; background: var(--green); }
-  .del { border: 0; background: none; color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 2px 4px; }
+  .del { border: 0; background: none; color: var(--muted); font-size: 1.1rem; line-height: 1;
+    min-width: 36px; min-height: 36px; }
   .del:hover { color: var(--red); }
 
   .cityrow { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; position: relative; }
@@ -72,7 +73,7 @@
   .ph { position: relative; width: 96px; }
   .ph img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
   .ph input { width: 100%; margin-top: 3px; background: rgba(10,14,34,.72); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font: .68rem var(--mono); padding: 3px 5px; }
+    border-radius: 6px; color: var(--text); font: .75rem var(--mono); padding: 3px 5px; }
   .ph .del { position: absolute; top: 2px; right: 2px; background: rgba(7,11,28,.75); border-radius: 6px; }
   .addph { width: 96px; height: 72px; display: flex; align-items: center; justify-content: center; cursor: pointer;
     border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font: .78rem var(--mono); }
@@ -118,8 +119,8 @@ function render() {
     <div class="card ${u.active ? '' : 'off'}">
       <div class="card-head">
         <span class="name" data-rename="${i}" title="Click to rename">${esc(u.name)}</span>
-        <button class="sw" role="switch" aria-checked="${u.active}" data-toggle="${i}" title="on/off"></button>
-        <button class="del" data-del="${i}" title="Delete player (history kept)">✕</button>
+        <button class="sw" role="switch" aria-checked="${u.active}" data-toggle="${i}" title="on/off" aria-label="Player active"></button>
+        <button class="del" data-del="${i}" title="Delete player (history kept)" aria-label="Delete player">✕</button>
       </div>
       <div class="cityrow">
         <input class="city" data-city="${i}" placeholder="Birth city — type, then pick from the list"
@@ -131,8 +132,8 @@ function render() {
         ${(u.photos || []).map((p, j) => `
         <div class="ph">
           <img src="/uploads/${esc(p.file)}" alt="">
-          <input data-cap="${i}:${j}" placeholder="Caption" value="${esc(p.caption || '')}">
-          <button class="del" data-delphoto="${i}:${j}" title="Remove photo">✕</button>
+          <input data-cap="${i}:${j}" placeholder="Caption" aria-label="Photo caption" value="${esc(p.caption || '')}">
+          <button class="del" data-delphoto="${i}:${j}" title="Remove photo" aria-label="Remove photo">✕</button>
         </div>`).join('')}
         <label class="addph">+ photo<input type="file" accept="image/*" data-photo="${i}" hidden></label>
       </div>

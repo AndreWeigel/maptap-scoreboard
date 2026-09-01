@@ -14,11 +14,11 @@
     --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; height: 100vh; overflow: hidden; color: var(--text); font: 15px/1.5 var(--body);
+  body { margin: 0; height: 100vh; overflow: hidden; color: var(--text); font: 16px/1.5 var(--body);
     background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
   #map { position: fixed; inset: 0; }
-  .credit { position: fixed; right: 8px; bottom: 6px; z-index: 3; color: rgba(152,164,212,.55);
-    font: .65rem var(--mono); pointer-events: none; }
+  .credit { position: fixed; right: 8px; bottom: 6px; z-index: 3; color: rgba(152,164,212,.8);
+    font: .7rem var(--mono); pointer-events: none; }
 
   .top { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4;
     width: min(560px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--border);
@@ -78,7 +78,7 @@
 <div class="ov" id="nameov" hidden><div class="card">
   <h1 id="wtitle">MapTap</h1>
   <p>Tap the globe where you think the answer is. Closer tap, more points. Type your name — it goes on the leaderboard.</p>
-  <input id="pname" maxlength="40" placeholder="Your name" autocomplete="off">
+  <input id="pname" maxlength="40" placeholder="Your name" aria-label="Your name" autocomplete="off">
   <button id="start">Play</button>
 </div></div>
 <div class="ov" id="endov" hidden><div class="card">
@@ -91,6 +91,7 @@
 import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs';
 
 const $ = (id) => document.getElementById(id);
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const slug = location.pathname.split('/').filter(Boolean).pop();
 const api = (p, opts) => fetch(`/game/api/${slug}${p}`, opts);
 
@@ -190,7 +191,7 @@ async function confirmGuess() {
   map.getSource('line').setData({ type: 'Feature', geometry: {
     type: 'LineString', coordinates: [[lng, lat], [r.truth.lng, r.truth.lat]] } });
   map.fitBounds(new maplibregl.LngLatBounds([lng, lat], [lng, lat]).extend([r.truth.lng, r.truth.lat]),
-    { padding: 90, maxZoom: 9, duration: 1200 });
+    { padding: 90, maxZoom: 9, duration: RM ? 0 : 1200 });
   showReveal(r);
   setBanner(game.rounds[ord].question, '');
   const last = ord === game.rounds.length - 1;
