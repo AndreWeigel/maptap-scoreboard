@@ -28,7 +28,7 @@
   button:hover { border-color: rgba(34,211,238,.4); }
   button.primary { background: rgba(34,211,238,.15); border-color: rgba(34,211,238,.45); color: var(--cyan); }
   button.primary:disabled { opacity: .45; cursor: default; }
-  button.sm { padding: 4px 10px; font-size: .8rem; }
+  button.sm { padding: 4px 10px; font-size: .8rem; min-width: 36px; min-height: 36px; }
   #status { font-family: var(--mono); font-size: .85rem; color: var(--muted); margin-left: auto; }
 
   .game { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--panel);
@@ -66,7 +66,8 @@
     border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font: .78rem var(--mono); }
   .addph:hover { border-color: rgba(34,211,238,.4); color: var(--cyan); }
   .story { width: 100%; resize: vertical; min-height: 34px; font: .82rem/1.45 var(--body); }
-  .del { border: 0; background: none; color: var(--muted); font-size: 1.05rem; line-height: 1; padding: 2px 4px; }
+  .del { border: 0; background: none; color: var(--muted); font-size: 1.05rem; line-height: 1;
+    min-width: 36px; min-height: 36px; }
   .del:hover { color: var(--red); }
 
   #mapmodal { position: fixed; inset: 0; z-index: 20; background: var(--bg); }
@@ -76,8 +77,8 @@
     border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font: .8rem var(--mono);
     color: var(--text); pointer-events: none; white-space: nowrap; }
   #mapclose { position: absolute; top: 10px; right: 10px; z-index: 21; }
-  .mapcredit { position: absolute; right: 8px; bottom: 6px; color: rgba(152,164,212,.7);
-    font: .65rem var(--mono); pointer-events: none; }
+  .mapcredit { position: absolute; right: 8px; bottom: 6px; color: rgba(152,164,212,.8);
+    font: .7rem var(--mono); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -97,7 +98,7 @@
 <div id="mapmodal" hidden>
   <div id="pickmap"></div>
   <div class="maphint">Tap the secret spot — zoom in for precision</div>
-  <button id="mapclose">✕</button>
+  <button id="mapclose" aria-label="Close map">✕</button>
   <div class="mapcredit">Imagery © Esri &amp; contributors</div>
 </div>
 <script>
@@ -126,7 +127,7 @@ function renderList() {
       <span class="meta">${g.rounds} rounds · ${g.plays} plays · ${g.created_at.slice(0, 10)}</span>
       <button class="sm" data-copy="${esc(g.slug)}">Copy link</button>
       <button class="sm" data-edit="${g.id}">Edit</button>
-      <button class="del" data-del="${g.id}" title="Delete game">✕</button>
+      <button class="del" data-del="${g.id}" title="Delete game" aria-label="Delete game">✕</button>
     </div>`).join('')
     : '<p class="empty">No games yet — press “+ New game”.</p>';
 }
@@ -142,26 +143,26 @@ function renderEditor() {
       <div class="head">
         <span class="n">#${i + 1}</span>
         <input type="text" class="q" data-q="${i}" placeholder="Question — e.g. Where was Daniel born?" value="${esc(r.question)}">
-        <button class="sm" data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
-        <button class="sm" data-down="${i}" ${i === rounds.length - 1 ? 'disabled' : ''}>↓</button>
-        <button class="del" data-delround="${i}" title="Remove round">✕</button>
+        <button class="sm" data-up="${i}" aria-label="Move round up" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="sm" data-down="${i}" aria-label="Move round down" ${i === rounds.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="del" data-delround="${i}" title="Remove round" aria-label="Remove round">✕</button>
       </div>
       <div class="locrow">
         <input type="text" class="city" data-city="${i}" placeholder="City — type, then pick from the list"
           value="${esc([r.city, r.country].filter(Boolean).join(', '))}">
         <input type="text" class="coords" data-coords="${i}" placeholder="or lat, lng" value="${esc(fmtCoords(r))}">
-        <button class="sm" data-mappick="${i}" title="Pick the spot on a map">🗺</button>
+        <button class="sm" data-mappick="${i}" title="Pick the spot on a map" aria-label="Pick the spot on a map">🗺</button>
         <span class="geo">${Number.isFinite(r.lat) ? '📍' : '⚠'}</span>
       </div>
       <div class="ansrow">
-        <input type="text" class="answer" data-answer="${i}" value="${esc(r.answer || '')}"
+        <input type="text" class="answer" data-answer="${i}" value="${esc(r.answer || '')}" aria-label="Answer label for the reveal"
           placeholder="Answer label for the reveal (optional) — e.g. Tanggula, Qinghai–Tibet Railway, China">
-        <input type="text" class="radius" data-radius="${i}" value="${esc(r.radius ?? '')}"
-          placeholder="±25" title="Full points within this many km of the pin">
+        <input type="text" inputmode="decimal" class="radius" data-radius="${i}" value="${esc(r.radius ?? '')}"
+          placeholder="±25" title="Full points within this many km of the pin" aria-label="Full-points radius in km">
         <span class="unit">km</span>
       </div>
       <div class="phrow">
-        ${r.photo ? `<img src="/uploads/${esc(r.photo)}" alt=""><button class="del" data-delphoto="${i}" title="Remove photo">✕</button>`
+        ${r.photo ? `<img src="/uploads/${esc(r.photo)}" alt=""><button class="del" data-delphoto="${i}" title="Remove photo" aria-label="Remove photo">✕</button>`
                   : `<label class="addph">+ photo<input type="file" accept="image/*" data-photo="${i}" hidden></label>`}
       </div>
       <textarea class="story" data-story="${i}" placeholder="The reveal story — shown after everyone guesses">${esc(r.story || '')}</textarea>

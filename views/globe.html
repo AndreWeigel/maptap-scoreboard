@@ -28,8 +28,8 @@
     border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px; font-size: .9rem; }
   #status b { display: block; font-size: 1.05rem; }
   #status:empty { display: none; }
-  .credit { position: fixed; right: 8px; bottom: 6px; z-index: 3; color: rgba(152,164,212,.55);
-    font: .65rem var(--mono); pointer-events: none; }
+  .credit { position: fixed; right: 8px; bottom: 6px; z-index: 3; color: rgba(152,164,212,.8);
+    font: .7rem var(--mono); pointer-events: none; }
 
   /* player card (a MapLibre marker element; the leader line points to the birthplace dot) */
   .pcard { background: var(--panel); border: 1px solid rgba(130,155,255,.5); border-radius: 10px;
@@ -48,13 +48,13 @@
     overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
   #panel[hidden] { display: none; }
   #panel .close { position: sticky; top: 0; float: right; background: rgba(7,11,28,.75); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 2px 8px; }
+    border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 1rem; min-width: 36px; min-height: 36px; }
   #panel .close:hover { color: var(--cyan); }
   #panel h2 { font: 700 1.05rem/1.3 var(--body); margin: 0 0 2px; }
-  #panel .place { font: .72rem var(--mono); color: var(--muted); margin: 0 0 8px; }
+  #panel .place { font: .75rem var(--mono); color: var(--muted); margin: 0 0 8px; }
   #panel .story { font-size: .88rem; margin: 0 0 10px; white-space: pre-wrap; }
   #panel img { width: 100%; border-radius: 10px; border: 1px solid var(--border); display: block; }
-  #panel .cap { font: .72rem var(--mono); color: var(--muted); margin: 4px 0 12px; }
+  #panel .cap { font: .75rem var(--mono); color: var(--muted); margin: 4px 0 12px; }
   #panel .person + .person { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
 </style>
 </head>
@@ -63,7 +63,7 @@
 <div id="map"></div>
 <svg id="lines"></svg>
 <div id="status"></div>
-<div id="panel" hidden><button class="close" title="Close">✕</button><div id="pbody"></div></div>
+<div id="panel" hidden><button class="close" title="Close" aria-label="Close">✕</button><div id="pbody"></div></div>
 <div class="credit">Imagery © Esri &amp; contributors · MapLibre</div>
 <script type="module">
 import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs';
@@ -130,8 +130,8 @@ const map = new maplibregl.Map({
 });
 window.map = map; // console/debug handle
 
-// gentle spin until the first touch — then it's all yours
-let spinning = true;
+// gentle spin until the first touch — then it's all yours (off for reduced motion)
+let spinning = !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const stopSpin = () => { spinning = false; };
 for (const ev of ['mousedown', 'touchstart', 'wheel']) map.on(ev, stopSpin);
 function spin() {
