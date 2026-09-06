@@ -154,8 +154,10 @@
   footer { margin-top: 20px; display: flex; gap: 16px; align-items: center; justify-content: space-between; color: var(--muted); font-size: .78rem; flex-wrap: wrap; }
   footer .egg { text-decoration: none; opacity: .35; transition: opacity .2s; }
   footer .egg:hover { opacity: 1; }
-  button { font-family: var(--body); font-weight: 600; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 9px 17px; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
-  button:hover { border-color: var(--cyan); background: rgba(34,211,238,.1); }
+  .foot-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  button, .linkbtn { font-family: var(--body); font-weight: 600; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 9px 17px; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
+  button:hover, .linkbtn:hover { border-color: var(--cyan); background: rgba(34,211,238,.1); }
+  .linkbtn { text-decoration: none; font-size: .82rem; display: inline-block; }
   :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -248,8 +250,12 @@
 
   <footer>
     <span id="updated"></span>
-    <a class="egg" href="/globe" aria-label="A little globe">🌍</a>
-    <button onclick="load()">↻ Reload</button>
+    <span class="foot-actions">
+      <a class="egg" href="/globe" aria-label="A little globe">🌍</a>
+      <a class="linkbtn" href="https://buymeacoffee.com/andreweigel" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+      <a class="linkbtn" href="mailto:aweigel.2000@gmail.com?subject=MapTap%20Scoreboard%20%E2%80%94%20feedback&amp;body=What%27s%20up%3F%20(bug%2C%20idea%2C%20feature%20request)%0A%0A">💡 Feedback / bug</a>
+      <button onclick="load()">↻ Reload</button>
+    </span>
   </footer>
 </div>
 
