@@ -137,17 +137,23 @@ test('feedback: stores valid posts, rejects junk, and stays admin-only to read',
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
 
-    assert.strictEqual((await post({ kind: 'bug', message: 'the globe is upside down', sender: 'Hen' })).status, 200);
-    assert.strictEqual((await post({ kind: 'wat', message: 'hi' })).status, 400);      // kind off the list
-    assert.strictEqual((await post({ kind: 'bug', message: '   ' })).status, 400);     // blank after trim
+    const good = { kind: 'bug', message: 'the globe is upside down', sender: 'Hen', email: 'hen@example.com' };
+    assert.strictEqual((await post(good)).status, 200);
+    assert.strictEqual((await post({ ...good, kind: 'wat' })).status, 400);      // kind off the list
+    assert.strictEqual((await post({ ...good, message: '   ' })).status, 400);   // blank after trim
+    assert.strictEqual((await post({ ...good, sender: '  ' })).status, 400);     // name now required
+    assert.strictEqual((await post({ ...good, email: '' })).status, 400);        // email now required
+    assert.strictEqual((await post({ ...good, email: 'hen@example' })).status, 400);  // no dot in domain
+    assert.strictEqual((await post({ ...good, email: 'not an email' })).status, 400);
 
     const rows = db.listFeedback();
     assert.strictEqual(rows.length, 1);
     assert.strictEqual(rows[0].message, 'the globe is upside down');
     assert.strictEqual(rows[0].sender, 'Hen');
+    assert.strictEqual(rows[0].email, 'hen@example.com');
 
     // Long messages are truncated, not rejected, so a rambler still gets through.
-    await post({ kind: 'other', message: 'x'.repeat(5000) });
+    await post({ ...good, kind: 'other', message: 'x'.repeat(5000) });
     assert.strictEqual(db.listFeedback()[0].message.length, 4000);
 
     assert.strictEqual((await fetch(`${base}/admin/feedback`)).status, 401);

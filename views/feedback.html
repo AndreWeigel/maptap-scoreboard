@@ -43,7 +43,8 @@
 <div class="wrap">
   <a class="back" href="/">← Scoreboard</a>
   <h1>Feedback</h1>
-  <p class="lede">Found a bug, want a feature, or just have an opinion? Fire away.</p>
+  <p class="lede">Found a bug, want a feature, or just have an opinion? Fire away.
+    Name and email are required so I can follow up — I won't use them for anything else.</p>
 
   <form class="panel" id="form">
     <div class="field">
@@ -60,8 +61,12 @@
         placeholder="The more detail the better — what you did, what happened, what you expected."></textarea>
     </div>
     <div class="field">
-      <label for="sender">Who's asking? <span class="opt">(optional)</span></label>
-      <input id="sender" maxlength="80" placeholder="Name, or how to reach you if I have questions">
+      <label for="sender">Your name</label>
+      <input id="sender" maxlength="80" required placeholder="So I know who I'm talking to">
+    </div>
+    <div class="field">
+      <label for="email">Your email</label>
+      <input id="email" type="email" maxlength="120" required placeholder="you@example.com">
     </div>
     <button type="submit" id="send">Send it</button>
     <div id="status" role="status"></div>
@@ -75,6 +80,10 @@ const status = $('status');
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const message = $('message').value.trim();
+  const sender = $('sender').value.trim();
+  const email = $('email').value.trim();
+  if (!sender) return $('sender').focus();
+  if (!email) return $('email').focus();
   if (!message) return $('message').focus();
   $('send').disabled = true;
   status.className = '';
@@ -83,7 +92,7 @@ $('form').addEventListener('submit', async (e) => {
     const res = await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: $('kind').value, message, sender: $('sender').value.trim() }),
+      body: JSON.stringify({ kind: $('kind').value, message, sender, email }),
     });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
     status.className = 'ok';

@@ -44,6 +44,10 @@ function buildSummary(db, kind) {
 }
 
 const FEEDBACK_KINDS = new Set(['bug', 'feature', 'other']);
+// Deliberately loose: one @, a dot in the domain, no spaces. The point is to
+// catch a typo, not to adjudicate RFC 5322 — a wrong-but-valid address gets
+// through either way, and the browser's type="email" already did a first pass.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 // ponytail: one global cap, not per-IP. Behind nginx every request arrives from
 // 127.0.0.1 unless trust-proxy is wired up, so per-IP buys nothing here. Ceiling:
@@ -158,10 +162,12 @@ function createApp(db, status) {
     const kind = FEEDBACK_KINDS.has(b.kind) ? b.kind : null;
     const message = typeof b.message === 'string' ? b.message.trim().slice(0, 4000) : '';
     const sender = typeof b.sender === 'string' ? b.sender.trim().slice(0, 80) : '';
-    if (!kind || !message) return res.status(400).json({ error: 'kind and message required' });
+    const email = typeof b.email === 'string' ? b.email.trim().slice(0, 120) : '';
+    if (!kind || !message || !sender) return res.status(400).json({ error: 'name, kind and message required' });
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'a valid email is required' });
     if (feedbackRateLimited()) return res.status(429).json({ error: 'too many just now — try later' });
     recentFeedback.push(Date.now());
-    db.addFeedback({ kind, message, sender: sender || null, created_at: new Date().toISOString() });
+    db.addFeedback({ kind, message, sender, email, created_at: new Date().toISOString() });
     res.json({ ok: true });
   });
 
@@ -171,7 +177,9 @@ function createApp(db, status) {
     // ponytail: rendered here rather than another fetch-and-render view file —
     // it's a read-only list. Give it its own page if it ever needs filters.
     const items = rows.map((r) => `<li><b>${esc(r.kind)}</b> · <time>${esc(r.created_at.slice(0, 16).replace('T', ' '))}</time>`
-      + `${r.sender ? ` · ${esc(r.sender)}` : ''}<p>${esc(r.message)}</p></li>`).join('');
+      + `${r.sender ? ` · ${esc(r.sender)}` : ''}`
+      + `${r.email ? ` · <a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : ''}`
+      + `<p>${esc(r.message)}</p></li>`).join('');
     res.type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MapTap · Feedback</title><style>
 :root{color-scheme:dark}body{margin:0;padding:48px 20px;background:radial-gradient(1200px 800px at 50% -5%,#0a1030,#070b1c 70%);color:#eaf0ff;font:15px/1.55 "Inter",-apple-system,"Segoe UI",Roboto,sans-serif}

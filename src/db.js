@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS feedback (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   kind       TEXT NOT NULL,
   message    TEXT NOT NULL,
-  sender     TEXT,
+  sender     TEXT NOT NULL,
+  email      TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 
@@ -47,6 +48,13 @@ function openDb(dbPath) {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
+
+  // Feedback started out with an optional sender and no email. SQLite has no
+  // ADD COLUMN IF NOT EXISTS and throws on a repeat, so look before adding.
+  // Rows written before this keep a NULL email; the form requires one now.
+  if (!db.prepare('PRAGMA table_info(feedback)').all().some((c) => c.name === 'email')) {
+    db.exec('ALTER TABLE feedback ADD COLUMN email TEXT');
+  }
 
   const insertResult = db.prepare(`
     INSERT INTO results (play_date, player_id, player_name, round1, round2, round3, round4, round5, final_score, raw_text, created_at)
@@ -86,7 +94,7 @@ function openDb(dbPath) {
 
     addFeedback(f) {
       return db.prepare(
-        'INSERT INTO feedback (kind, message, sender, created_at) VALUES (@kind, @message, @sender, @created_at)'
+        'INSERT INTO feedback (kind, message, sender, email, created_at) VALUES (@kind, @message, @sender, @email, @created_at)'
       ).run(f).lastInsertRowid;
     },
 
