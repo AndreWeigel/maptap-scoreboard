@@ -23,13 +23,16 @@ jobs:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
           SSH_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # ponytail: ssh-keyscan trusts whatever answers on this run (MITM ceiling).
-          # Fine for a personal box; to harden, drop the keyscan and store the host
-          # key in a DEPLOY_KNOWN_HOSTS secret written to ~/.ssh/known_hosts instead.
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+          # Pinned host keys, not ssh-keyscan: a keyscan trusts whatever answers on
+          # the run, so it would authenticate a machine-in-the-middle just as happily
+          # as the real box. If the server is ever rebuilt its host keys change and
+          # this step fails loudly — refresh the DEPLOY_KNOWN_HOSTS secret then.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
             "cd '$DEPLOY_DIR' && git pull --ff-only && docker compose up -d --build"
