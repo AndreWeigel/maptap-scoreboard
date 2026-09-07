@@ -11,6 +11,7 @@ const users = require('./users');
 const { resolveRows } = users;
 const settings = require('./settings');
 const importer = require('./import');
+const mail = require('./mail');
 
 // HTTP Basic Auth for admin routes. Any username; the password must equal
 // ADMIN_TOKEN (compared in constant time). Unset ADMIN_TOKEN => admin locked.
@@ -167,7 +168,17 @@ function createApp(db, status) {
     if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'a valid email is required' });
     if (feedbackRateLimited()) return res.status(429).json({ error: 'too many just now — try later' });
     recentFeedback.push(Date.now());
-    db.addFeedback({ kind, message, sender, email, created_at: new Date().toISOString() });
+    const row = { kind, message, sender, email, created_at: new Date().toISOString() };
+    db.addFeedback(row);
+    // Stored first, mailed after, and never awaited: the report is safe in the DB
+    // whatever SMTP does, and the sender shouldn't wait on a handshake to see
+    // "thanks". Failures are logged inside sendFeedbackMail.
+    // .catch is not belt-and-braces: an unhandled rejection takes the process
+    // down, so a throw anywhere in the mail path would kill the bot over a
+    // notification. sendFeedbackMail swallows SMTP errors; this covers the rest.
+    Promise.resolve()
+      .then(() => mail.sendFeedbackMail(row))
+      .catch((err) => console.error('[feedback] notification failed:', err.message));
     res.json({ ok: true });
   });
 

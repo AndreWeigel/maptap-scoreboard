@@ -11,6 +11,13 @@ module.exports = {
   WEEKLY_CRON: process.env.WEEKLY_CRON || '5 0 * * 1',   // Mon 00:05, covers the prior week
   ADMIN_TOKEN: process.env.ADMIN_TOKEN || '',            // if set, required to hit /admin/summary
   PORT: Number(process.env.PORT) || 3000,
+  // Feedback notification mail. Unset SMTP_USER/SMTP_PASS = no mail is sent and
+  // the form still works; reports are always readable at /admin/feedback.
+  SMTP_HOST: process.env.SMTP_HOST || 'mail.gandi.net',
+  SMTP_PORT: Number(process.env.SMTP_PORT) || 465,
+  SMTP_USER: process.env.SMTP_USER || '',   // full mailbox address
+  SMTP_PASS: process.env.SMTP_PASS || '',
+  FEEDBACK_TO: process.env.FEEDBACK_TO || '',  // where feedback notifications land
   FIRE_THRESHOLD: 95,           // round >= this = 🔥 round
   PANIC_THRESHOLD: 40,          // round <= this = 😱 round
   DB_PATH: 'data/scores.db',

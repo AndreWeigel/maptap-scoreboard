@@ -18,6 +18,12 @@ services:
       # Starting state for the digests; /summary toggles override at runtime.
       DAILY_SUMMARY: ${DAILY_SUMMARY:-false}
       WEEKLY_SUMMARY: ${WEEKLY_SUMMARY:-false}
+      # Feedback notification mail. Empty = nothing is sent, form still works.
+      SMTP_HOST: ${SMTP_HOST:-mail.gandi.net}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      FEEDBACK_TO: ${FEEDBACK_TO:-}
     volumes:
       # SQLite DB + Baileys WhatsApp session. Losing this = re-scan the QR.
       - ./data:/app/data
