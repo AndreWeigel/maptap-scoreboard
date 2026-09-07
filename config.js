@@ -10,6 +10,7 @@ module.exports = {
   WEEKLY_SUMMARY: process.env.WEEKLY_SUMMARY === 'true', // post Monday weekly recap (default off)
   WEEKLY_CRON: process.env.WEEKLY_CRON || '5 0 * * 1',   // Mon 00:05, covers the prior week
   ADMIN_TOKEN: process.env.ADMIN_TOKEN || '',            // if set, required to hit /admin/summary
+  FRIENDS_TOKEN: process.env.FRIENDS_TOKEN || '',        // password for /globe + /uploads (friends' photos)
   PORT: Number(process.env.PORT) || 3000,
   // Feedback notification mail. Unset SMTP_USER/SMTP_PASS = no mail is sent and
   // the form still works; reports are always readable at /admin/feedback.

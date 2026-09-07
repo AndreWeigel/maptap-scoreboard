@@ -1,4 +1,5 @@
 process.env.ADMIN_TOKEN = 's3cret'; // before config loads, so basicAuth is enabled in this process
+process.env.FRIENDS_TOKEN = 'friends'; // ditto for the globe/photos gate
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -70,7 +71,7 @@ test('daily summary falls back to yesterday when today has no results yet', asyn
   } finally { fs.rmSync(users.FILE, { force: true }); }
 });
 
-test('/api/globe: only active players with coords, layers shape', async () => {
+test('/api/globe: locked to friends, only active players with coords, layers shape', async () => {
   try {
     users.save({ users: [
       { name: 'Ana',  ids: [], city: 'Porto', country: 'Portugal', lat: 41.15, lng: -8.61,
@@ -80,7 +81,8 @@ test('/api/globe: only active players with coords, layers shape', async () => {
       { name: 'Nocity', ids: [] },
     ] });
     await withServer(async (base) => {
-      const res = await fetch(`${base}/api/globe`);
+      assert.strictEqual((await fetch(`${base}/api/globe`)).status, 401);
+      const res = await fetch(`${base}/api/globe`, { headers: { authorization: authHeader('friends') } });
       assert.strictEqual(res.status, 200);
       const body = await res.json();
       assert.strictEqual(body.layers.length, 1);
@@ -114,9 +116,13 @@ test('upload: auth required, images only, random name, served back', async () =>
     const { file } = await res.json();
     assert.match(file, /^[a-f0-9]{16}\.png$/);
     try {
-      const got = await fetch(`${base}/uploads/${file}`);
+      assert.strictEqual((await fetch(`${base}/uploads/${file}`)).status, 401);
+      const got = await fetch(`${base}/uploads/${file}`, { headers: { authorization: authHeader('friends') } });
       assert.strictEqual(got.status, 200);
       assert.deepEqual(Buffer.from(await got.arrayBuffer()), png);
+      // The admin password opens the friends door too (so /users and the game builder still preview).
+      assert.strictEqual((await fetch(`${base}/uploads/${file}`,
+        { headers: { authorization: authHeader('s3cret') } })).status, 200);
     } finally { fs.rmSync(`data/uploads/${file}`, { force: true }); }
   });
 });

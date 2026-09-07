@@ -29,9 +29,10 @@ Put that JID in `config.js` and restart.
 
 Settings live in [config.js](config.js): group JID, timezone, season start, cron
 times, port, and the 🔥/😱 thresholds. Some can be set via env for Docker (see
-[.env.example](.env.example)): `ADMIN_TOKEN` (the admin password) and
-`DAILY_SUMMARY` / `WEEKLY_SUMMARY` (the digests' starting state, which you then
-toggle at `/summary`).
+[.env.example](.env.example)): `ADMIN_TOKEN` (the admin password),
+`FRIENDS_TOKEN` (the share-with-friends password for `/globe` and the photos
+under `/uploads`) and `DAILY_SUMMARY` / `WEEKLY_SUMMARY` (the digests' starting
+state, which you then toggle at `/summary`).
 
 Seasons are a date filter. Every query uses `play_date >= SEASON_START`. Bump
 `SEASON_START` to start a new one; nothing is deleted. For an arbitrary range the
@@ -85,8 +86,16 @@ Admin (HTTP Basic Auth, any username, password is `ADMIN_TOKEN`; unset means loc
 - `POST /api/import/preview` — list the senders in an export; `POST /api/import` — import chosen ones
 - `GET /admin/summary?kind=daily|weekly[&send=1]` — preview or post a digest
 
-The public pages have no auth. Keep the site behind your own TLS/proxy; Basic
-Auth assumes HTTPS.
+Friends-only (Basic Auth, password is `FRIENDS_TOKEN`; the admin password also
+works, and with `FRIENDS_TOKEN` unset it's the only one that does):
+
+- `GET /globe` and `GET /api/globe` — the globe page and its points: real names,
+  birth cities, exact coordinates, stories, photo filenames
+- `GET /uploads/*` — every uploaded photo, including the ones on `/game/:slug`
+  pages, so a shared game link now needs the password too
+
+The scoreboard and `/api/standings` stay public. Keep the site behind your own
+TLS/proxy; Basic Auth assumes HTTPS.
 
 ## Scripts
 

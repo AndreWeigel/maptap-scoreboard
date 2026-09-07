@@ -13,21 +13,33 @@ const settings = require('./settings');
 const importer = require('./import');
 const mail = require('./mail');
 
-// HTTP Basic Auth for admin routes. Any username; the password must equal
-// ADMIN_TOKEN (compared in constant time). Unset ADMIN_TOKEN => admin locked.
-function basicAuth(req, res, next) {
-  const secret = config.ADMIN_TOKEN;
-  const deny = (msg, code = 401) => {
-    if (code === 401) res.set('WWW-Authenticate', 'Basic realm="maptap admin"');
-    res.status(code).send(msg);
+// HTTP Basic Auth. Any username; the password must equal one of the named
+// config secrets (compared in constant time). None of them set => locked (503).
+function passwordGate(realm, ...secretNames) {
+  return function gate(req, res, next) {
+    const secrets = secretNames.map((n) => config[n]).filter(Boolean);
+    const deny = (msg, code = 401) => {
+      if (code === 401) res.set('WWW-Authenticate', `Basic realm="maptap ${realm}"`);
+      res.status(code).send(msg);
+    };
+    if (!secrets.length) return deny(`Locked — set ${secretNames[0]} to enable.`, 503);
+    const [, b64 = ''] = (req.headers.authorization || '').split(' ');
+    const pass = Buffer.from(b64, 'base64').toString().split(':').slice(1).join(':');
+    const a = Buffer.from(pass);
+    const ok = secrets.some((s) => {
+      const b = Buffer.from(s);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    });
+    if (!ok) return deny('Auth required.');
+    next();
   };
-  if (!secret) return deny('Admin disabled — set ADMIN_TOKEN to enable.', 503);
-  const [, b64 = ''] = (req.headers.authorization || '').split(' ');
-  const pass = Buffer.from(b64, 'base64').toString().split(':').slice(1).join(':');
-  const a = Buffer.from(pass), b = Buffer.from(secret);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return deny('Auth required.');
-  next();
 }
+
+const basicAuth = passwordGate('admin', 'ADMIN_TOKEN');
+// Photos, the globe page and its API all expose friends' faces, real names and
+// birth cities, so they sit behind FRIENDS_TOKEN (the admin password opens them
+// too). FRIENDS_TOKEN unset => admin-only: the safe direction to fail.
+const friendsAuth = passwordGate('friends', 'FRIENDS_TOKEN', 'ADMIN_TOKEN');
 
 function buildSummary(db, kind) {
   if (kind === 'daily') {
@@ -69,7 +81,7 @@ function createApp(db, status) {
   const IMG_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
   // Random names never change content, so cache forever.
   // ponytail: photos served at original size; add resizing if page weight ever hurts.
-  app.use('/uploads', express.static(UPLOADS, { maxAge: '365d', immutable: true }));
+  app.use('/uploads', friendsAuth, express.static(UPLOADS, { maxAge: '365d', immutable: true }));
 
   app.post('/api/upload', basicAuth, express.raw({ type: 'image/*', limit: '8mb' }), (req, res) => {
     const ext = IMG_EXT[(req.headers['content-type'] || '').split(';')[0]];
@@ -203,15 +215,15 @@ b{color:#22d3ee;text-transform:uppercase;font-size:.78rem;letter-spacing:.08em}t
 ${items ? `<ul>${items}</ul>` : '<p class="empty">Nothing yet.</p>'}</div>`);
   });
 
-  // ---- Globe easter egg (public — same exposure as the scoreboard: names + city only). ----
-  app.get('/globe', (_req, res) => {
+  // ---- Globe easter egg (FRIENDS_TOKEN: names, birth coords, stories and faces). ----
+  app.get('/globe', friendsAuth, (_req, res) => {
     res.sendFile(path.join(__dirname, '..', 'views', 'globe.html'));
   });
 
   // Point layers for the globe page. One layer today; future point sets
   // (custom places, visited cities, …) are just more entries in `layers` —
   // the page renders whatever arrives.
-  app.get('/api/globe', (_req, res) => {
+  app.get('/api/globe', friendsAuth, (_req, res) => {
     const points = users.get().users
       .filter((u) => u.active && Number.isFinite(u.lat))
       .map((u) => ({
