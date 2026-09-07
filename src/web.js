@@ -43,6 +43,18 @@ function buildSummary(db, kind) {
   return weeklySummary(resolveRows(db.getResults(from, to)), from, to, config);
 }
 
+const FEEDBACK_KINDS = new Set(['bug', 'feature', 'other']);
+
+// ponytail: one global cap, not per-IP. Behind nginx every request arrives from
+// 127.0.0.1 unless trust-proxy is wired up, so per-IP buys nothing here. Ceiling:
+// a spammer can lock the form for an hour; add trust proxy + per-IP if that ever happens.
+const recentFeedback = [];
+function feedbackRateLimited() {
+  const cutoff = Date.now() - 3600e3;
+  while (recentFeedback.length && recentFeedback[0] < cutoff) recentFeedback.shift();
+  return recentFeedback.length >= 30;
+}
+
 function createApp(db, status) {
   const app = express();
   app.use(express.json({ limit: '12mb' })); // WhatsApp exports run ~1MB of text
@@ -134,6 +146,42 @@ function createApp(db, status) {
       history: dailyHistory(rows),
       updatedAt: new Date().toISOString(),
     });
+  });
+
+  // ---- Feedback (public form; admin reads it at /admin/feedback). ----
+  app.get('/feedback', (_req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'views', 'feedback.html'));
+  });
+
+  app.post('/api/feedback', (req, res) => {
+    const b = req.body || {};
+    const kind = FEEDBACK_KINDS.has(b.kind) ? b.kind : null;
+    const message = typeof b.message === 'string' ? b.message.trim().slice(0, 4000) : '';
+    const sender = typeof b.sender === 'string' ? b.sender.trim().slice(0, 80) : '';
+    if (!kind || !message) return res.status(400).json({ error: 'kind and message required' });
+    if (feedbackRateLimited()) return res.status(429).json({ error: 'too many just now — try later' });
+    recentFeedback.push(Date.now());
+    db.addFeedback({ kind, message, sender: sender || null, created_at: new Date().toISOString() });
+    res.json({ ok: true });
+  });
+
+  app.get('/admin/feedback', basicAuth, (_req, res) => {
+    const rows = db.listFeedback();
+    const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    // ponytail: rendered here rather than another fetch-and-render view file —
+    // it's a read-only list. Give it its own page if it ever needs filters.
+    const items = rows.map((r) => `<li><b>${esc(r.kind)}</b> · <time>${esc(r.created_at.slice(0, 16).replace('T', ' '))}</time>`
+      + `${r.sender ? ` · ${esc(r.sender)}` : ''}<p>${esc(r.message)}</p></li>`).join('');
+    res.type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Feedback</title><style>
+:root{color-scheme:dark}body{margin:0;padding:48px 20px;background:radial-gradient(1200px 800px at 50% -5%,#0a1030,#070b1c 70%);color:#eaf0ff;font:15px/1.55 "Inter",-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:680px;margin:0 auto}a{color:#98a4d4;text-decoration:none;font-family:ui-monospace,Menlo,monospace}a:hover{color:#22d3ee}
+h1{font-family:ui-monospace,Menlo,monospace;font-size:1.15rem;letter-spacing:.12em;text-transform:uppercase;color:#22d3ee;margin:12px 0 20px}
+ul{list-style:none;padding:0;display:grid;gap:14px}li{background:rgba(16,22,52,.9);border:1px solid rgba(130,155,255,.16);border-radius:16px;padding:16px 20px}
+b{color:#22d3ee;text-transform:uppercase;font-size:.78rem;letter-spacing:.08em}time{color:#98a4d4;font-size:.8rem}p{margin:8px 0 0;white-space:pre-wrap}
+.empty{color:#98a4d4;text-align:center;padding:40px 0}</style>
+<div class="wrap"><a href="/admin">← Admin</a><h1>Feedback (${rows.length})</h1>
+${items ? `<ul>${items}</ul>` : '<p class="empty">Nothing yet.</p>'}</div>`);
   });
 
   // ---- Globe easter egg (public — same exposure as the scoreboard: names + city only). ----

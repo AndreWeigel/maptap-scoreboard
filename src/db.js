@@ -25,6 +25,14 @@ CREATE TABLE IF NOT EXISTS players (
   first_seen   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS feedback (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind       TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  sender     TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS parse_failures (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id  TEXT,
@@ -74,6 +82,17 @@ function openDb(dbPath) {
       db.prepare(
         'INSERT INTO parse_failures (player_id, raw_text, reason, created_at) VALUES (?, ?, ?, ?)'
       ).run(playerId, rawText, reason, now.toISOString());
+    },
+
+    addFeedback(f) {
+      return db.prepare(
+        'INSERT INTO feedback (kind, message, sender, created_at) VALUES (@kind, @message, @sender, @created_at)'
+      ).run(f).lastInsertRowid;
+    },
+
+    // ponytail: newest 200, no paging — a friend group won't out-write that.
+    listFeedback() {
+      return db.prepare('SELECT * FROM feedback ORDER BY id DESC LIMIT 200').all();
     },
 
     getResults(from, to) {

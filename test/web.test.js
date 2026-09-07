@@ -127,3 +127,32 @@ test('healthz is 503 when WhatsApp is down', async () => {
   assert.strictEqual(body.status, 'degraded');
   assert.strictEqual(body.whatsappConnected, false);
 });
+
+// Public write endpoint — the only unauthenticated thing that touches the DB,
+// so the validation is what keeps junk out.
+test('feedback: stores valid posts, rejects junk, and stays admin-only to read', async () => {
+  const db = openDb(':memory:');
+  await withServer(async (base) => {
+    const post = (body) => fetch(`${base}/api/feedback`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+
+    assert.strictEqual((await post({ kind: 'bug', message: 'the globe is upside down', sender: 'Hen' })).status, 200);
+    assert.strictEqual((await post({ kind: 'wat', message: 'hi' })).status, 400);      // kind off the list
+    assert.strictEqual((await post({ kind: 'bug', message: '   ' })).status, 400);     // blank after trim
+
+    const rows = db.listFeedback();
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].message, 'the globe is upside down');
+    assert.strictEqual(rows[0].sender, 'Hen');
+
+    // Long messages are truncated, not rejected, so a rambler still gets through.
+    await post({ kind: 'other', message: 'x'.repeat(5000) });
+    assert.strictEqual(db.listFeedback()[0].message.length, 4000);
+
+    assert.strictEqual((await fetch(`${base}/admin/feedback`)).status, 401);
+    const ok = await fetch(`${base}/admin/feedback`, { headers: { authorization: authHeader('s3cret') } });
+    assert.strictEqual(ok.status, 200);
+    assert.match(await ok.text(), /the globe is upside down/);
+  }, db);
+});

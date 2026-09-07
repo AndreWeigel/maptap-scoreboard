@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapTap · Feedback</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070b1c; --bg-2: #0a1030; --panel: rgba(16,22,52,.9); --border: rgba(130,155,255,.16);
+    --text: #eaf0ff; --muted: #98a4d4; --cyan: #22d3ee; --green: #4ade80;
+    --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 48px 20px; color: var(--text);
+    font: 15px/1.55 var(--body); background: radial-gradient(1200px 800px at 50% -5%, var(--bg-2), var(--bg) 70%); }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  a.back { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: .95rem; }
+  a.back:hover { color: var(--cyan); }
+  h1 { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 12px 0 6px; }
+  .lede { color: var(--muted); font-size: .92rem; margin: 0 0 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 22px; }
+  label { display: block; font-weight: 600; font-size: .9rem; margin: 0 0 8px; }
+  label .opt { font-weight: 400; color: var(--muted); }
+  select, textarea, input { width: 100%; font: inherit; color: var(--text); background: rgba(10,14,34,.72);
+    border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; }
+  textarea { min-height: 150px; resize: vertical; }
+  .field + .field { margin-top: 18px; }
+  button { margin-top: 20px; width: 100%; font-family: var(--body); font-weight: 600; font-size: 1rem;
+    color: #06202a; background: var(--cyan); border: 0; border-radius: 12px; padding: 13px; cursor: pointer;
+    transition: filter .15s; }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .55; cursor: wait; }
+  #status { min-height: 1.4em; margin-top: 14px; font-family: var(--mono); font-size: .9rem; color: var(--muted); text-align: center; }
+  #status.ok { color: var(--green); }
+  #status.err { color: #f0616a; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Scoreboard</a>
+  <h1>Feedback</h1>
+  <p class="lede">Found a bug, want a feature, or just have an opinion? Fire away.</p>
+
+  <form class="panel" id="form">
+    <div class="field">
+      <label for="kind">What is it?</label>
+      <select id="kind">
+        <option value="bug">🐛 Something's broken</option>
+        <option value="feature">💡 Idea / feature request</option>
+        <option value="other">💬 Something else</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="message">Tell me about it</label>
+      <textarea id="message" maxlength="4000" required
+        placeholder="The more detail the better — what you did, what happened, what you expected."></textarea>
+    </div>
+    <div class="field">
+      <label for="sender">Who's asking? <span class="opt">(optional)</span></label>
+      <input id="sender" maxlength="80" placeholder="Name, or how to reach you if I have questions">
+    </div>
+    <button type="submit" id="send">Send it</button>
+    <div id="status" role="status"></div>
+  </form>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const status = $('status');
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = $('message').value.trim();
+  if (!message) return $('message').focus();
+  $('send').disabled = true;
+  status.className = '';
+  status.textContent = 'sending…';
+  try {
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: $('kind').value, message, sender: $('sender').value.trim() }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    status.className = 'ok';
+    status.textContent = 'Got it — thanks! 🙏';
+    $('form').reset();
+  } catch (err) {
+    status.className = 'err';
+    status.textContent = String(err.message || err);
+  } finally {
+    $('send').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
