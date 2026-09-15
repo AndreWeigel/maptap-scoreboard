@@ -4,7 +4,13 @@ module.exports = {
   GROUP_ID: process.env.GROUP_ID || '',   // WhatsApp group JID. Leave empty on first run: the
                                           // bot logs every group JID so you can copy it here.
   TZ: process.env.TZ || 'Europe/Berlin',  // daily-boundary timezone
-  SEASON_START: process.env.SEASON_START || '2026-01-01', // change to reset seasons
+  // Seasons, in date order. Each runs until the day before the next one starts;
+  // the newest one that has started is live. Add the next one ahead of time and
+  // it takes over on its day.
+  SEASONS: [
+    { name: 'Season 1', from: '2026-01-01' },
+    { name: 'Season 2', from: '2026-09-23' },  // autumn equinox
+  ],
   CRON_TIME: '59 23 * * *',     // daily winner computation (+ daily digest)
   DAILY_SUMMARY: process.env.DAILY_SUMMARY === 'true',   // post nightly digest to the group (default off)
   WEEKLY_SUMMARY: process.env.WEEKLY_SUMMARY === 'true', // post Monday weekly recap (default off)

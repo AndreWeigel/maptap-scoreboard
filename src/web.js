@@ -72,6 +72,15 @@ function feedbackRateLimited() {
   return recentFeedback.length >= 30;
 }
 
+// Seasons are back-to-back date ranges over the same results: each runs to the
+// day before the next one starts, and the newest started one runs to today. One
+// that hasn't started is left out, so the next season can be added ahead of time.
+function seasonsAsOf(list, today) {
+  const started = list.filter((s) => s.from <= today);
+  const dayBefore = (ymd) => new Date(Date.parse(ymd) - 864e5).toISOString().slice(0, 10); // UTC: no DST skew
+  return started.map((s, i) => ({ id: i + 1, ...s, to: started[i + 1] ? dayBefore(started[i + 1].from) : today }));
+}
+
 function createApp(db, status) {
   const app = express();
   app.use(express.json({ limit: '12mb' })); // WhatsApp exports run ~1MB of text
@@ -153,12 +162,15 @@ function createApp(db, status) {
   });
 
   app.get('/api/standings', (req, res) => {
-    const from = req.query.from || config.SEASON_START;
-    const to = req.query.to || toDateStr(new Date());
+    const seasons = seasonsAsOf(config.SEASONS, toDateStr(new Date()));
+    const season = seasons.find((s) => String(s.id) === req.query.season) || seasons.at(-1);
+    const from = req.query.from || season.from;
+    const to = req.query.to || season.to;
     const rows = resolveRows(db.getResults(from, to));
     res.json({
       range: { from, to },
-      seasonStart: config.SEASON_START,
+      season,
+      seasons,
       ...computeStandings(rows, config),
       history: dailyHistory(rows),
       updatedAt: new Date().toISOString(),
@@ -270,4 +282,4 @@ ${items ? `<ul>${items}</ul>` : '<p class="empty">Nothing yet.</p>'}</div>`);
   return app;
 }
 
-module.exports = { createApp, basicAuth };
+module.exports = { createApp, basicAuth, seasonsAsOf };

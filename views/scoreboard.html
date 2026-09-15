@@ -76,7 +76,8 @@
   .wordmark .sub { display: block; font-family: var(--mono); font-size: clamp(1.2rem, 4vw, 1.8rem); letter-spacing: .38em; color: var(--muted); margin-top: 14px; text-shadow: 0 2px 10px rgba(7,11,28,.7); }
   .meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 14px; color: var(--muted); font-size: .84rem; }
   .status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 14, 34, .72); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
+  .season-pick { font: inherit; color: var(--text); padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 14, 34, .72); cursor: pointer; }
+  @media (pointer: coarse) { .season-pick { min-height: 44px; } }  /* the one tappable thing in the hero */  .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
   .dot.on { background: #4ade80; box-shadow: 0 0 9px #4ade80; }
 
   /* ---- View toggle (Leaderboard <-> Daily winners), knob is a spinning earth ---- */
@@ -182,6 +183,7 @@
     <a class="kicker" href="https://www.maptap.gg" target="_blank" rel="noopener">▶ PLAY MAPTAP.GG</a>
     <h1 class="wordmark"><span class="map">Map</span><span class="tap">Tap</span> <span class="sub">Scoreboard</span></h1>
     <div class="meta">
+      <select class="season-pick" id="season-pick" aria-label="Season" onchange="pickSeason(this)" hidden></select>
       <span id="season"></span>
       <span class="status"><span class="dot" id="wadot"></span>WhatsApp</span>
     </div>
@@ -286,7 +288,7 @@ function toggleView() { setView(view === 'leaderboard' ? 'history' : 'leaderboar
 // GitHub-style participation calendar, built from the per-day history the API
 // already returns. Shade = how many players posted that day.
 const ymd = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-function renderCalendar(hist, seasonStart) {
+function renderCalendar(hist, from, to) {
   const grid = document.getElementById('cal-grid'), months = document.getElementById('cal-months');
   grid.innerHTML = ''; months.innerHTML = '';
   if (!hist.length) { document.getElementById('calcount').textContent = '0 days'; return; }
@@ -296,16 +298,15 @@ function renderCalendar(hist, seasonStart) {
   const level = (n) => n === 0 ? 0 : Math.min(4, Math.ceil(4 * n / maxN));
 
   const parse = (s) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-  // Grid spans the whole season → today, so today lands on the right and days
-  // before anyone played show as empty squares.
-  const first = parse(seasonStart || hist.map((d) => d.date).sort()[0]);
-  const start = new Date(first); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
-  const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = ymd(today);
+  // Grid spans the whole season (up to today for the live one), so its last day
+  // lands on the right and days nobody played show as empty squares.
+  const start = parse(from); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
+  const end = parse(to);
+  const todayStr = ymd(new Date());
 
   let col = 0, lastMonth = -1;
   const monthAtCol = new Map();                  // col -> month name; last write wins so a short leading week doesn't double-label
-  for (let dt = new Date(start); dt <= today; dt.setDate(dt.getDate() + 1)) {
+  for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
     const key = ymd(dt);
     const day = byDate.get(key);
     const n = day ? day.ranked.length : 0;
@@ -344,17 +345,28 @@ function renderCalendar(hist, seasonStart) {
   grid.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
 })();
 
+// Newest season is first in the picker; picking it clears ?season= so the link stays live.
+function pickSeason(sel) {
+  history.replaceState(null, '', sel.selectedIndex === 0 ? location.pathname : `?season=${sel.value}`);
+  load();
+}
+
 async function load() {
  try {
-  const s = await (await fetch('/api/standings')).json();
-  document.getElementById('season').textContent = `Season since ${s.seasonStart} · ${s.activeDays} active days`;
-  document.getElementById('count').textContent = `${s.leaderboard.length} players`;
+  // The page's ?season=N goes straight to the API; no param = the live season.
+  const s = await (await fetch('/api/standings' + location.search)).json();
+  const live = s.season.id === s.seasons.length;
+  const pick = document.getElementById('season-pick');
+  pick.replaceChildren(...[...s.seasons].reverse().map((x) => new Option(x.name, x.id, false, x.id === s.season.id)));
+  pick.hidden = s.seasons.length < 2;  // a one-option dropdown is a dead control; name the season in the text instead
+  document.getElementById('season').textContent = (pick.hidden ? `${s.season.name} · ` : '')
+    + (live ? `${s.range.from} → now` : `Final standings · ${s.range.from} → ${s.range.to}`) + ` · ${s.activeDays} active days`;  document.getElementById('count').textContent = `${s.leaderboard.length} players`;
   document.getElementById('updated').textContent = 'Updated ' + new Date(s.updatedAt).toLocaleTimeString();
 
   const b = s.badges;
   const mostConsistent = [...s.leaderboard].sort((a, b) => b.participationPct - a.participationPct)[0];
   document.getElementById('badges').innerHTML = [
-    b.record && badge('All-time record', b.record.score, `${b.record.name} · ${b.record.date}`),
+    b.record && badge('Season record', b.record.score, `${b.record.name} · ${b.record.date}`),
     b.mostFire && badge('Most 🔥 rounds', b.mostFire.count, b.mostFire.name),
     mostConsistent && badge('Most consistent 📅', mostConsistent.participationPct + '%', mostConsistent.name),
     b.currentWinStreak && badge('Win streak', b.currentWinStreak.length, b.currentWinStreak.name),
@@ -385,7 +397,7 @@ async function load() {
     </tr>`;
   }).join('') || '<tr><td colspan="4" class="empty">No games yet.</td></tr>';
 
-  renderCalendar(hist, s.seasonStart);
+  renderCalendar(hist, s.range.from, s.range.to);
 
   const h = await (await fetch('/healthz')).json();
   document.getElementById('wadot').className = 'dot' + (h.whatsappConnected ? ' on' : '');

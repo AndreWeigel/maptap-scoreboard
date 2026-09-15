@@ -12,7 +12,6 @@ services:
       # Empty = discovery mode: the bot logs every group JID it sees.
       GROUP_ID: ${GROUP_ID:-}
       TZ: ${TZ:-Europe/Madrid}
-      SEASON_START: ${SEASON_START:-2026-01-01}
       # Password for /summary + /admin (HTTP Basic Auth). Empty = those pages locked.
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       # Password for /globe and the photos under /uploads. Empty = admin-only.

@@ -27,16 +27,19 @@ Put that JID in `config.js` and restart.
 
 ## Config
 
-Settings live in [config.js](config.js): group JID, timezone, season start, cron
+Settings live in [config.js](config.js): group JID, timezone, seasons, cron
 times, port, and the 🔥/😱 thresholds. Some can be set via env for Docker (see
 [.env.example](.env.example)): `ADMIN_TOKEN` (the admin password),
 `FRIENDS_TOKEN` (the share-with-friends password for `/globe` and the photos
 under `/uploads`) and `DAILY_SUMMARY` / `WEEKLY_SUMMARY` (the digests' starting
 state, which you then toggle at `/summary`).
 
-Seasons are a date filter. Every query uses `play_date >= SEASON_START`. Bump
-`SEASON_START` to start a new one; nothing is deleted. For an arbitrary range the
-API takes `from`/`to`: `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+Seasons are back-to-back date ranges, listed in `SEASONS` in config.js. Each
+runs from its `from` to the day before the next one starts, and the newest one
+that has started is live, so add the next season ahead of time and it takes over
+on its day. Nothing is deleted: past seasons stay browsable from the picker on
+the scoreboard (`/?season=1`). The API takes `?season=N`, or `from`/`to` for an
+arbitrary range: `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`.
 
 ## How the bot reads messages
 

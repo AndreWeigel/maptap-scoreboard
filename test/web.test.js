@@ -3,7 +3,7 @@ process.env.FRIENDS_TOKEN = 'friends'; // ditto for the globe/photos gate
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const { createApp } = require('../src/web');
+const { createApp, seasonsAsOf } = require('../src/web');
 const { openDb } = require('../src/db');
 const { toDateStr } = require('../src/parser');
 const users = require('../src/users');
@@ -124,6 +124,22 @@ test('upload: auth required, images only, random name, served back', async () =>
       assert.strictEqual((await fetch(`${base}/uploads/${file}`,
         { headers: { authorization: authHeader('s3cret') } })).status, 200);
     } finally { fs.rmSync(`data/uploads/${file}`, { force: true }); }
+  });
+});
+
+test('seasons: back-to-back ranges, unstarted ones hidden, ?season= picks one', async () => {
+  const list = [{ name: 'S1', from: '2026-01-01' }, { name: 'Autumn', from: '2026-09-23' }, { name: 'Next', from: '2027-01-01' }];
+  const spans = (today) => seasonsAsOf(list, today).map((s) => [s.id, s.from, s.to]);
+  assert.deepStrictEqual(spans('2026-09-15'), [[1, '2026-01-01', '2026-09-15']]);
+  assert.deepStrictEqual(spans('2026-09-23'), [[1, '2026-01-01', '2026-09-22'], [2, '2026-09-23', '2026-09-23']]);
+  assert.deepStrictEqual(spans('2027-02-01'), [
+    [1, '2026-01-01', '2026-09-22'], [2, '2026-09-23', '2026-12-31'], [3, '2027-01-01', '2027-02-01']]);
+
+  await withServer(async (base) => {
+    const live = await (await fetch(`${base}/api/standings`)).json();
+    assert.strictEqual(live.season.id, live.seasons.length);
+    const first = await (await fetch(`${base}/api/standings?season=1`)).json();
+    assert.deepStrictEqual(first.range, { from: first.seasons[0].from, to: first.seasons[0].to });
   });
 });
 
