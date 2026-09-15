@@ -44,9 +44,13 @@ function parseMessages(text) {
   return msgs;
 }
 
-function backfill(db, text) {
-  const counts = { ok: 0, replaced: 0, failure: 0, ignored: 0 };
+function backfill(db, text, { after } = {}) {
+  const counts = { ok: 0, replaced: 0, failure: 0, ignored: 0, skipped: 0 };
   for (const m of parseMessages(text)) {
+    // Re-importing a day that already has rows does NOT replace them: the export
+    // keys players by name, live rows by @lid, so both rows survive and the day is
+    // counted twice. Pass `after` = the last day already recorded to cut the overlap.
+    if (after && m.ts <= after) { counts.skipped++; continue; }
     // ponytail: export has no JIDs, so the sender name is the player_id; if the same
     // player later posts live under a JID, merge them on the /users admin page.
     const res = ingestMessage(db, { playerId: m.sender, playerName: m.sender, text: m.text, now: m.ts });
@@ -58,11 +62,15 @@ function backfill(db, text) {
 if (require.main === module) {
   const file = process.argv[2];
   if (!file) {
-    console.error('Usage: node scripts/backfill.js <whatsapp-export.txt>');
+    console.error('Usage: node scripts/backfill.js <whatsapp-export.txt> [after-YYYY-MM-DD]');
+    console.error('  after-YYYY-MM-DD: skip that day and everything before it. Use the last day');
+    console.error('  already in the DB, or every overlapping day gets counted twice.');
     process.exit(1);
   }
-  const c = backfill(openDb(config.DB_PATH), fs.readFileSync(file, 'utf8'));
-  console.log(`Backfill done: ${c.ok} ingested, ${c.replaced} replaced, ${c.failure} parse failures, ${c.ignored} ignored.`);
+  // Local noon, matching the timestamps parseMessages builds, so the cutoff day compares equal.
+  const after = process.argv[3] ? new Date(`${process.argv[3]}T12:00:00`) : null;
+  const c = backfill(openDb(config.DB_PATH), fs.readFileSync(file, 'utf8'), { after });
+  console.log(`Backfill done: ${c.ok} ingested, ${c.replaced} replaced, ${c.failure} parse failures, ${c.ignored} ignored, ${c.skipped} before cutoff.`);
 }
 
 module.exports = { matchStart, parseMessages, backfill };

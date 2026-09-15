@@ -40,3 +40,22 @@ test('continuation lines join the message, and a result round-trips', () => {
   assert.strictEqual(rows[0].final_score, 604);
   assert.strictEqual(rows[0].round2, 90);
 });
+
+test('the after cutoff skips days already in the DB, keeps later ones', () => {
+  // The whole point: an export overlapping recorded days would insert a second,
+  // name-keyed row per day, and resolveRows folds both onto the player — double count.
+  const db = openDb(':memory:');
+  const counts = backfill(db, [
+    '[07.07.26, 11:12:29] Ana-Lucia B.: www.maptap.gg July 7',
+    '81🎓 90🔥 77🎉 84🏆 0🤮',
+    'Final score: 604',
+    '[08.07.26, 09:03:11] Ana-Lucia B.: www.maptap.gg July 8',
+    '81🎓 90🔥 77🎉 84🏆 10🤮',
+    'Final score: 614',
+  ].join('\n'), { after: new Date('2026-07-07T12:00:00') });
+
+  assert.strictEqual(counts.skipped, 1); // one message: the start line plus its continuation lines
+  assert.strictEqual(counts.ok, 1);
+  assert.strictEqual(db.getResults('2026-07-07', '2026-07-07').length, 0);
+  assert.strictEqual(db.getResults('2026-07-08', '2026-07-08')[0].final_score, 614);
+});

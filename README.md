@@ -107,7 +107,10 @@ node scripts/backfill.js export.txt        # ingest an exported WhatsApp chat (.
 node scripts/delete-player.js "Alice"      # remove a player by display name
 ```
 
-`backfill.js` ingests *every* sender in the file. For a targeted import (new
+`backfill.js` ingests *every* sender in the file. If the export overlaps days
+already in the DB, pass the last recorded day as a second argument
+(`node scripts/backfill.js export.txt 2026-07-07`): export rows are keyed by
+name and live rows by `@lid`, so an overlapping day would count twice. For a targeted import (new
 people only, existing players protected from overwrite) use the `/import` admin
 page instead — it lets you pick which senders to import and skips anyone already
 registered.
