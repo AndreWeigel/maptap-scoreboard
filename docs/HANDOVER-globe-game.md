@@ -1,5 +1,7 @@
 # Handover: People stories + "our own MapTap" game
 
+> **Superseded for "what exists today" by [HANDOVER-globe.md](HANDOVER-globe.md)** — this file is the pre-implementation decision record.
+
 2026-08-31. Written at the end of the session that built the `/globe` easter
 egg. Read this whole file before touching code. The feature decisions below
 are already made with André — don't re-litigate them; do write a proper spec
