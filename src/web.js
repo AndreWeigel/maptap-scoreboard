@@ -106,8 +106,12 @@ function createApp(db, status) {
   // ---- Custom games (isolated module: src/game/, data/game.db). ----
   app.use('/game', require('./game/routes')({ basicAuth }));
 
+  // The live season's theme goes on <html> server-side, so the page never flashes the
+  // default look while it waits for /api/standings.
   app.get('/', (_req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'views', 'scoreboard.html'));
+    const { theme } = seasonsAsOf(config.SEASONS, toDateStr(new Date())).at(-1);
+    const html = fs.readFileSync(path.join(__dirname, '..', 'views', 'scoreboard.html'), 'utf8');
+    res.type('html').send(theme ? html.replace('<html lang="en">', `<html lang="en" data-theme="${theme}">`) : html);
   });
 
   // ---- Admin (Basic Auth). ----

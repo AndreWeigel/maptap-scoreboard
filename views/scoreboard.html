@@ -17,10 +17,15 @@
     --border: rgba(130, 155, 255, 0.16);
     --text: #eaf0ff;
     --muted: #98a4d4;
-    --cyan: #22d3ee;      /* maptap accent */
+    --dim: #7580c0;               /* zero counts */
+    --shade-rgb: 7, 11, 28;       /* = --bg: shadows and dark glass */
+    --accent: #22d3ee;            /* maptap cyan */
+    --accent-rgb: 34, 211, 238;
+    --accent-hi: #8af3ff;
     --teal: #2dd4bf;
-    --blue: #5b9dff;
-    --pink: #f472b6;      /* cute tertiary */
+    --accent-fade: #5b9dff;       /* the badge accent bar fades into this */
+    --accent-2: #f472b6;          /* cute pink tertiary */
+    --accent-2-rgb: 244, 114, 182;
     --gold: #ffd15c;
     --silver: #cdd8ee;
     --bronze: #f0a878;
@@ -36,6 +41,30 @@
     --body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: "VT323", ui-monospace, monospace;   /* retro terminal, for the arcade table */
     --pixel: "Press Start 2P", ui-monospace, monospace;  /* arcade accents only */
+  }
+  /* Autumn edition. config.js gives a season theme: 'autumn'; while it's live the server
+     stamps data-theme="autumn" on <html>. Warm night, amber + ember, leaf-colour calendar. */
+  :root[data-theme="autumn"] {
+    --bg: #120a0c;
+    --bg-2: #2a130e;
+    --panel: rgba(38, 20, 16, 0.86);
+    --panel-solid: #26140f;
+    --border: rgba(255, 170, 90, 0.18);
+    --text: #fff3e6;
+    --muted: #d6b49a;
+    --dim: #a0806a;
+    --shade-rgb: 18, 10, 12;
+    --accent: #fbbf24;            /* amber */
+    --accent-rgb: 251, 191, 36;
+    --accent-hi: #fde68a;
+    --accent-fade: #ef5a2a;
+    --accent-2: #ef5a2a;          /* ember */
+    --accent-2-rgb: 239, 90, 42;
+    --l0: rgba(255,170,90,.09);
+    --l1: rgba(250,204,21,.55);   /* yellow leaf */
+    --l2: rgba(251,146,60,.75);   /* orange */
+    --l3: #f97316;
+    --l4: #dc2626;                /* red */
   }
   * { box-sizing: border-box; }
   html, body { overflow-x: hidden; }
@@ -59,7 +88,7 @@
   }
   #globe-bg { z-index: 0; }
   /* keeps text legible: darkens the viewport edges over the globe */
-  #vignette { z-index: 0; background: radial-gradient(120% 90% at 50% 32%, transparent 40%, rgba(7,11,28,.55) 100%); }
+  #vignette { z-index: 0; background: radial-gradient(120% 90% at 50% 32%, transparent 40%, rgba(var(--shade-rgb), .55) 100%); }
   body.no-webgl #globe-bg { display: none; }
   body.no-webgl #stars { opacity: .9; }
 
@@ -67,26 +96,28 @@
 
   /* ---- Hero ---- */
   .hero { text-align: center; padding: 26px 0 30px; }
-  .kicker, .meta { text-shadow: 0 2px 14px rgba(7, 11, 28, .8); }  /* hero text sits over the bare globe */
-  .kicker { display: inline-block; font-family: var(--mono); font-size: 1.16rem; letter-spacing: .28em; text-transform: uppercase; color: var(--cyan); text-decoration: none; margin: 0 0 16px; text-shadow: 0 2px 12px rgba(7,11,28,.85), 0 0 10px rgba(34,211,238,.45); transition: color .15s, text-shadow .15s; }
-  .kicker:hover { color: #8af3ff; text-shadow: 0 2px 12px rgba(7,11,28,.85), 0 0 18px rgba(34,211,238,.95); }
+  .kicker, .meta { text-shadow: 0 2px 14px rgba(var(--shade-rgb), .8); }  /* hero text sits over the bare globe */
+  .kicker { display: inline-block; font-family: var(--mono); font-size: 1.16rem; letter-spacing: .28em; text-transform: uppercase; color: var(--accent); text-decoration: none; margin: 0 0 16px; text-shadow: 0 2px 12px rgba(var(--shade-rgb), .85), 0 0 10px rgba(var(--accent-rgb), .45); transition: color .15s, text-shadow .15s; }
+  .kicker:hover { color: var(--accent-hi); text-shadow: 0 2px 12px rgba(var(--shade-rgb), .85), 0 0 18px rgba(var(--accent-rgb), .95); }
   .wordmark { font-family: var(--pixel); font-size: clamp(1.5rem, 6.6vw, 2.7rem); line-height: 1.12; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
-  .wordmark .map { color: var(--cyan); text-shadow: 3px 3px 0 rgba(9,12,34,.95), 0 0 20px rgba(34,211,238,.5); }
-  .wordmark .tap { color: var(--pink); text-shadow: 3px 3px 0 rgba(9,12,34,.95), 0 0 20px rgba(244,114,182,.5); }
-  .wordmark .sub { display: block; font-family: var(--mono); font-size: clamp(1.2rem, 4vw, 1.8rem); letter-spacing: .38em; color: var(--muted); margin-top: 14px; text-shadow: 0 2px 10px rgba(7,11,28,.7); }
+  .wordmark .map { color: var(--accent); text-shadow: 3px 3px 0 rgba(var(--shade-rgb), .95), 0 0 20px rgba(var(--accent-rgb), .5); }
+  .wordmark .tap { color: var(--accent-2); text-shadow: 3px 3px 0 rgba(var(--shade-rgb), .95), 0 0 20px rgba(var(--accent-2-rgb), .5); }
+  .wordmark .sub { display: block; font-family: var(--mono); font-size: clamp(1.2rem, 4vw, 1.8rem); letter-spacing: .38em; color: var(--muted); margin-top: 14px; text-shadow: 0 2px 10px rgba(var(--shade-rgb), .7); }
   .meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 14px; color: var(--muted); font-size: .84rem; }
-  .status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 14, 34, .72); }
-  .season-pick { font: inherit; color: var(--text); padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 14, 34, .72); cursor: pointer; }
-  @media (pointer: coarse) { .season-pick { min-height: 44px; } }  /* the one tappable thing in the hero */  .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
+  .status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(var(--shade-rgb), .72); }
+  .season-pick { font: inherit; color: var(--text); padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(var(--shade-rgb), .72); cursor: pointer; }
+  @media (pointer: coarse) { .season-pick { min-height: 44px; } }  /* the one tappable thing in the hero */
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
   .dot.on { background: #4ade80; box-shadow: 0 0 9px #4ade80; }
 
-  /* ---- View toggle (Leaderboard <-> Daily winners), knob is a spinning earth ---- */
+  /* ---- View toggle (Leaderboard <-> Daily winners), knob is a spinning earth (a pumpkin in autumn) ---- */
   .viewtoggle { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 4px 0 24px; }
-  .vt-label { background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: 1.15rem; letter-spacing: .06em; color: var(--muted); padding: 4px 2px; transition: color .18s, text-shadow .18s; }
-  .vt-label.active { color: var(--cyan); text-shadow: 0 0 12px rgba(34,211,238,.55); }
-  .switch { position: relative; width: 62px; height: 30px; flex: none; padding: 0; cursor: pointer; border-radius: 999px; border: 1px solid var(--border); background: rgba(10,14,34,.72); transition: border-color .18s; }
-  .switch:hover { border-color: rgba(34,211,238,.4); }
-  .switch .knob { position: absolute; top: 50%; left: 3px; transform: translateY(-50%); width: 24px; height: 24px; display: grid; place-items: center; font-size: 17px; border-radius: 50%; background: rgba(20,26,60,.9); box-shadow: 0 0 10px rgba(34,211,238,.4); transition: left .28s cubic-bezier(.4,1.3,.5,1); animation: spin 8s linear infinite; }
+  /* Bare text over the globe, which gets bright under the pumpkin's lit continents: a dark halo keeps it readable. */
+  .vt-label { background: none; border: 0; cursor: pointer; font-family: var(--mono); font-size: 1.15rem; letter-spacing: .06em; color: var(--muted); padding: 4px 2px; text-shadow: 0 1px 3px rgba(var(--shade-rgb), .95), 0 0 12px rgba(var(--shade-rgb), .9); transition: color .18s, text-shadow .18s; }
+  .vt-label.active { color: var(--accent); text-shadow: 0 1px 3px rgba(var(--shade-rgb), .95), 0 0 12px rgba(var(--accent-rgb), .55); }
+  .switch { position: relative; width: 62px; height: 30px; flex: none; padding: 0; cursor: pointer; border-radius: 999px; border: 1px solid var(--border); background: rgba(var(--shade-rgb), .72); transition: border-color .18s; }
+  .switch:hover { border-color: rgba(var(--accent-rgb), .4); }
+  .switch .knob { position: absolute; top: 50%; left: 3px; transform: translateY(-50%); width: 24px; height: 24px; display: grid; place-items: center; font-size: 17px; border-radius: 50%; background: var(--panel-solid); box-shadow: 0 0 10px rgba(var(--accent-rgb), .4); transition: left .28s cubic-bezier(.4,1.3,.5,1); animation: spin 8s linear infinite; }
   .switch.on .knob { left: 35px; }
   @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
 
@@ -101,7 +132,7 @@
   .cal-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--l0); transition: outline-color .1s; outline: 1.5px solid transparent; outline-offset: 1px; }
   .cal-cell.l1 { background: var(--l1); } .cal-cell.l2 { background: var(--l2); }
   .cal-cell.l3 { background: var(--l3); } .cal-cell.l4 { background: var(--l4); }
-  .cal-cell.today { box-shadow: 0 0 0 1.5px var(--cyan); }
+  .cal-cell.today { box-shadow: 0 0 0 1.5px var(--accent); }
   .cal-cell:hover { outline-color: var(--text); }
   .cal-legend { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 12px; font-size: .72rem; color: var(--muted); font-family: var(--mono); }
   .cal-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
@@ -112,44 +143,44 @@
   /* ---- Badges ---- */
   .badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 14px; margin: 6px 0 26px; }
   .badge { position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 15px 18px; transition: transform .2s ease, border-color .2s ease; }
-  .badge::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; border-radius: 3px; background: linear-gradient(var(--cyan), var(--blue)); }
-  .badge:hover { transform: translateY(-3px); border-color: rgba(34,211,238,.4); }
+  .badge::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; border-radius: 3px; background: linear-gradient(var(--accent), var(--accent-fade)); }
+  .badge:hover { transform: translateY(-3px); border-color: rgba(var(--accent-rgb), .4); }
   .badge .label { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .badge .value { font-family: var(--display); font-weight: 700; font-size: 1.7rem; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .badge .who { font-size: .82rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ---- Leaderboard (glass, globe shows through) ---- */
   /* ---- 90s arcade high-score table ---- */
-  .panel { position: relative; background: var(--panel); backdrop-filter: blur(8px); border: 1px solid rgba(34,211,238,.32); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px -30px rgba(0,0,0,.8), inset 0 0 0 1px rgba(34,211,238,.08), 0 0 26px -6px rgba(34,211,238,.28); }
+  .panel { position: relative; background: var(--panel); backdrop-filter: blur(8px); border: 1px solid rgba(var(--accent-rgb), .32); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px -30px rgba(0,0,0,.8), inset 0 0 0 1px rgba(var(--accent-rgb), .08), 0 0 26px -6px rgba(var(--accent-rgb), .28); }
   .panel::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: repeating-linear-gradient(rgba(0,0,0,0) 0 2px, rgba(0,0,0,.16) 2px 3px); } /* CRT scanlines */
-  .panel-head { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 15px; border-bottom: 1px solid rgba(34,211,238,.18); }
-  .panel-head h2 { font-family: var(--pixel); font-size: .82rem; margin: 0; color: var(--cyan); letter-spacing: 1px; text-shadow: 0 0 12px rgba(34,211,238,.7); }
+  .panel-head { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 15px; border-bottom: 1px solid rgba(var(--accent-rgb), .18); }
+  .panel-head h2 { font-family: var(--pixel); font-size: .82rem; margin: 0; color: var(--accent); letter-spacing: 1px; text-shadow: 0 0 12px rgba(var(--accent-rgb), .7); }
   .panel-head span { font-family: var(--mono); color: var(--muted); font-size: 1.05rem; letter-spacing: .5px; }
   .scroll { position: relative; z-index: 1; overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; min-width: 660px; }
-  thead th { font-family: var(--mono); font-size: .98rem; text-transform: uppercase; letter-spacing: .12em; color: var(--cyan); font-weight: 400; padding: 12px 16px 12px; text-align: right; white-space: nowrap; text-shadow: 0 0 8px rgba(34,211,238,.4); }
+  thead th { font-family: var(--mono); font-size: .98rem; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); font-weight: 400; padding: 12px 16px 12px; text-align: right; white-space: nowrap; text-shadow: 0 0 8px rgba(var(--accent-rgb), .4); }
   thead th:nth-child(2) { text-align: left; }
-  tbody td { font-family: var(--mono); font-size: 1.3rem; line-height: 1; padding: 9px 16px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text); border-top: 1px solid rgba(34,211,238,.1); }
+  tbody td { font-family: var(--mono); font-size: 1.3rem; line-height: 1; padding: 9px 16px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text); border-top: 1px solid rgba(var(--accent-rgb), .1); }
   tbody td:nth-child(2) { text-align: left; }
   tbody tr { transition: background .15s ease; }
-  tbody tr:nth-child(even) td { background: rgba(34,211,238,.035); }   /* zebra, high-score style */
-  tbody tr:hover td { background: rgba(34,211,238,.1); }
+  tbody tr:nth-child(even) td { background: rgba(var(--accent-rgb), .035); }   /* zebra, high-score style */
+  tbody tr:hover td { background: rgba(var(--accent-rgb), .1); }
   .rank { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 26px; padding: 0 6px; border-radius: 3px; font-family: var(--pixel); font-size: .6rem; color: var(--muted); background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
   .rank.m1 { color: var(--gold); background: rgba(255,209,92,.16); box-shadow: inset 0 0 0 1px rgba(255,209,92,.5), 0 0 12px -2px rgba(255,209,92,.6); }
   .rank.m2 { color: var(--silver); background: rgba(205,216,238,.14); box-shadow: inset 0 0 0 1px rgba(205,216,238,.45), 0 0 10px -2px rgba(205,216,238,.45); }
   .rank.m3 { color: var(--bronze); background: rgba(240,168,120,.16); box-shadow: inset 0 0 0 1px rgba(240,168,120,.5), 0 0 10px -2px rgba(240,168,120,.5); }
   .player { font-family: var(--mono); font-size: 1.42rem; letter-spacing: .5px; color: #f4f7ff; }
-  .wins { font-family: var(--pixel); font-size: .82rem; color: var(--cyan); text-shadow: 0 0 10px rgba(34,211,238,.55); }
+  .wins { font-family: var(--pixel); font-size: .82rem; color: var(--accent); text-shadow: 0 0 10px rgba(var(--accent-rgb), .55); }
   .field { color: var(--muted); font-size: .85rem; }
   tr.leader td { background: linear-gradient(90deg, rgba(255,209,92,.16), rgba(255,209,92,.02) 72%) !important; }
   tr.leader .player { color: var(--gold); text-shadow: 0 0 14px rgba(255,209,92,.7); }
-  tr.leader .player::after { content: "1ST"; font-family: var(--pixel); font-size: .5rem; margin-left: 10px; color: var(--pink); vertical-align: middle; text-shadow: 0 0 10px rgba(244,114,182,.75); animation: blink 1.2s steps(1) infinite; }
+  tr.leader .player::after { content: "1ST"; font-family: var(--pixel); font-size: .5rem; margin-left: 10px; color: var(--accent-2); vertical-align: middle; text-shadow: 0 0 10px rgba(var(--accent-2-rgb), .75); animation: blink 1.2s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   .pod { font-family: var(--mono); color: var(--muted); font-size: 1.18rem; }
   .pill { display: inline-block; min-width: 32px; padding: 3px 8px; border-radius: 4px; font-family: var(--mono); font-size: 1.06rem; line-height: 1; font-variant-numeric: tabular-nums; }
   .pill.fire { background: rgba(255,159,69,.16); color: var(--fire); box-shadow: inset 0 0 0 1px rgba(255,159,69,.3); }
   .pill.panic { background: rgba(125,211,252,.16); color: var(--panic); box-shadow: inset 0 0 0 1px rgba(125,211,252,.3); }
-  .pill.zero { background: transparent; color: #7580c0; box-shadow: none; }
+  .pill.zero { background: transparent; color: var(--dim); box-shadow: none; }
   .empty { font-family: var(--mono); font-size: 1.2rem; text-align: center; color: var(--muted); padding: 44px 0; }
 
   footer { margin-top: 20px; display: flex; gap: 16px; align-items: center; justify-content: space-between; color: var(--muted); font-size: .78rem; flex-wrap: wrap; }
@@ -157,14 +188,29 @@
   footer .egg:hover { opacity: 1; }
   .foot-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   button, .linkbtn { font-family: var(--body); font-weight: 600; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 9px 17px; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
-  button:hover, .linkbtn:hover { border-color: var(--cyan); background: rgba(34,211,238,.1); }
+  button:hover, .linkbtn:hover { border-color: var(--accent); background: rgba(var(--accent-rgb), .1); }
   .linkbtn { text-decoration: none; font-size: .82rem; display: inline-block; }
-  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   tbody tr, .badge { animation: rise .35s ease both; }
 
-  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  /* ---- Autumn edition extras: the edition label and falling leaves exist only under data-theme="autumn" ---- */
+  .edition, #leaves { display: none; }
+  :root[data-theme="autumn"] .edition { display: inline-block; }
+  :root[data-theme="autumn"] #leaves { display: block; }
+  .edition { margin-top: 14px; font-family: var(--pixel); font-size: .62rem; letter-spacing: 2px; color: #1c0d08; background: linear-gradient(var(--accent), #fb923c); padding: 7px 12px 6px; border-radius: 4px; box-shadow: 3px 3px 0 rgba(var(--shade-rgb), .9), 0 0 18px rgba(251, 146, 60, .45); }
+  #leaves { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  /* outer span falls, inner glyph sways, so the two transforms don't fight */
+  #leaves span { position: absolute; top: 0; font-size: var(--s); opacity: .55; animation: fall var(--d) linear var(--delay) infinite; }
+  #leaves b { display: inline-block; animation: sway calc(var(--d) / 4) ease-in-out var(--delay) infinite alternate; }
+  @keyframes fall { from { transform: translateY(-6vh); } to { transform: translateY(106vh); } }
+  @keyframes sway { from { transform: translateX(-26px) rotate(-25deg); } to { transform: translateX(26px) rotate(40deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    #leaves { display: none !important; }  /* frozen leaves would just sit along the top edge */
+  }
   @media (max-width: 560px) {
     body { padding: 18px 14px 34px; }
     .hero { padding: 14px 0 22px; }
@@ -177,11 +223,13 @@
 <div id="stars"></div>
 <div id="vignette"></div>
 <canvas id="globe-bg" aria-hidden="true"></canvas>
+<div id="leaves" aria-hidden="true"></div>
 
 <div class="wrap">
   <header class="hero">
     <a class="kicker" href="https://www.maptap.gg" target="_blank" rel="noopener">▶ PLAY MAPTAP.GG</a>
     <h1 class="wordmark"><span class="map">Map</span><span class="tap">Tap</span> <span class="sub">Scoreboard</span></h1>
+    <div class="edition">🍂 AUTUMN EDITION</div>
     <div class="meta">
       <select class="season-pick" id="season-pick" aria-label="Season" onchange="pickSeason(this)" hidden></select>
       <span id="season"></span>
@@ -263,6 +311,18 @@
 
 <!-- ===== Data (classic script, unchanged logic) ===== -->
 <script>
+// Autumn edition (theme stamped on <html> by the server): pumpkin knob, and a dozen falling
+// leaves spread out with negative delays so the screen isn't empty on load.
+if (document.documentElement.dataset.theme === 'autumn') {
+  document.querySelector('.knob').textContent = '🎃';
+  const leaves = document.getElementById('leaves');
+  for (let i = 0; i < 12; i++) {
+    const s = document.createElement('span');
+    s.style.cssText = `left:${(i * 83) % 100}%;--d:${14 + (i * 7) % 9}s;--delay:-${((i * 5.3) % 20).toFixed(1)}s;--s:${16 + (i * 5) % 12}px`;
+    s.innerHTML = `<b>${i % 3 ? '🍂' : '🍁'}</b>`;
+    leaves.appendChild(s);
+  }
+}
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function badge(label, value, who) {
   return `<div class="badge"><div class="label">${label}</div>
@@ -438,35 +498,90 @@ else {
     const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
     camera.position.z = 7.4; // pulled back so a fuller planet reads, closer to maptap's floating-globe look
 
+    // Autumn edition: the earth becomes a glowing world pumpkin (pumpkinGeometry/Skin/Stem below).
+    const AUTUMN = document.documentElement.dataset.theme === 'autumn';
+    const SQUASH = 0.78; // pumpkin height vs width
+
     const group = new THREE.Group();
-    group.rotation.z = 0.41; // ~23.5° axial tilt
+    group.rotation.z = AUTUMN ? 0.22 : 0.41; // ~23.5° axial tilt for the earth, a gentler lean for the pumpkin
+    if (AUTUMN) group.rotation.x = 0.28;     // tip the top toward the viewer so the stem reads
     scene.add(group);
 
     // Render on decode: a data: URI texture still decodes on a later task, so an eager
     // render (esp. the single reduced-motion frame) would otherwise show an untextured sphere.
     const tex = new THREE.TextureLoader().load(EARTH_TEXTURE, () => renderer.render(scene, camera));
     tex.colorSpace = THREE.SRGBColorSpace;
-    const earth = new THREE.Mesh(
-      new THREE.SphereGeometry(2, 64, 64),
-      new THREE.MeshPhongMaterial({ map: tex, shininess: 6, specular: 0x1b3a5a })
-    );
+    const earth = AUTUMN
+      ? new THREE.Mesh(pumpkinGeometry(), new THREE.MeshPhongMaterial({ map: tex, shininess: 14, specular: 0x3a2410 }))
+      : new THREE.Mesh(
+        new THREE.SphereGeometry(2, 64, 64),
+        new THREE.MeshPhongMaterial({ map: tex, shininess: 6, specular: 0x1b3a5a })
+      );
+    if (AUTUMN) {
+      earth.material.onBeforeCompile = pumpkinSkin;
+      earth.add(pumpkinStem());
+    }
     group.add(earth);
 
-    // cyan atmosphere rim (fresnel glow on a slightly larger back-facing shell)
+    // atmosphere rim (fresnel glow on a slightly larger back-facing shell): cyan, or a softer warm glow for the pumpkin
+    const rim = AUTUMN ? 'vec4(1.0,0.52,0.12,1.0) * 0.65' : 'vec4(0.28,0.86,0.98,1.0)';
     const atmo = new THREE.Mesh(
-      new THREE.SphereGeometry(2.16, 64, 64),
+      new THREE.SphereGeometry(AUTUMN ? 2.12 : 2.16, 64, 64),
       new THREE.ShaderMaterial({
         transparent: true, side: THREE.BackSide, blending: THREE.AdditiveBlending,
         vertexShader: `varying vec3 vN; void main(){ vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-        fragmentShader: `varying vec3 vN; void main(){ float i = pow(0.80 - dot(vN, vec3(0.0,0.0,1.0)), 1.9); gl_FragColor = vec4(0.28,0.86,0.98,1.0) * clamp(i,0.0,1.25); }`
+        fragmentShader: `varying vec3 vN; void main(){ float i = pow(0.80 - dot(vN, vec3(0.0,0.0,1.0)), 1.9); gl_FragColor = ${rim} * clamp(i,0.0,1.25); }`
       })
     );
+    if (AUTUMN) atmo.scale.y = SQUASH;
     group.add(atmo);
 
-    scene.add(new THREE.AmbientLight(0x8899cc, 0.55));
+    scene.add(new THREE.AmbientLight(AUTUMN ? 0xffd2a8 : 0x8899cc, AUTUMN ? 0.5 : 0.55));
     const sun = new THREE.DirectionalLight(0xffffff, 1.5);
     sun.position.set(-3, 1.2, 3);
     scene.add(sun);
+
+    // ---- World pumpkin (autumn edition) ----
+    // Body: the earth's sphere pushed into 10 ribs, squashed, and dimpled at both poles.
+    function pumpkinGeometry() {
+      const geo = new THREE.SphereGeometry(2, 160, 80), p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+        const lobe = 0.9 + 0.1 * Math.pow(Math.abs(Math.sin(5 * Math.atan2(z, x))), 0.45); // 0.9 in a groove
+        const rho = Math.hypot(x, z) / 2;                                                  // 0 at the poles
+        p.setXYZ(i, x * lobe, y * SQUASH * (1 - 0.28 * Math.exp(-(rho * rho) / 0.08)), z * lobe);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    }
+    // Skin: the earth texture only decides land vs water. Water is pumpkin (#e8701a), land is carved
+    // (#2a1204) and glows like a jack-o'-lantern; colours are linear. Sampling a fixed, blurrier mip
+    // grows the continents a smooth ~1° and hides JPEG speckles. Fixed via textureLod, not a bias:
+    // a bias follows screen size and turned the continents into blocks on a zoomed-in phone view.
+    function pumpkinSkin(sh) {
+      sh.fragmentShader = `
+        float landAt(sampler2D m, vec2 uv) {
+          vec4 t = textureLod(m, uv, 1.5);
+          float ocean = smoothstep(1.8, 3.0, t.b / max(t.r, 0.004)); // water is blue-dominant; dark forest isn't
+          float ice = smoothstep(0.35, 0.6, min(t.r, min(t.g, t.b)));  // polar white stays skin
+          return (1.0 - ocean) * (1.0 - ice);
+        }
+      ` + sh.fragmentShader
+        .replace('#include <map_fragment>', `
+          float land = landAt(map, vMapUv);
+          diffuseColor.rgb = mix(vec3(0.807, 0.162, 0.010), vec3(0.023, 0.006, 0.001), land);`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          totalEmissiveRadiance += land * vec3(1.0, 0.62, 0.18) * 0.8;`);
+    }
+    // Stem: a tapered cylinder, top sheared sideways into a curl, base sunk into the top dimple.
+    function pumpkinStem() {
+      const geo = new THREE.CylinderGeometry(0.1, 0.24, 0.55, 14, 8), p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) { const h = p.getY(i) + 0.275; p.setX(i, p.getX(i) + 0.55 * h * h); }
+      geo.computeVertexNormals();
+      const stem = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color: '#5a4e1e', shininess: 4 }));
+      stem.position.y = 2 * SQUASH * 0.72 + 0.2;
+      return stem;
+    }
 
     function applyResize() {
       renderer.setSize(innerWidth, innerHeight);

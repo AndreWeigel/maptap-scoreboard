@@ -143,6 +143,19 @@ test('seasons: back-to-back ranges, unstarted ones hidden, ?season= picks one', 
   });
 });
 
+test('/ stamps the live season theme on <html>, and only while that season is live', async () => {
+  const config = require('../config');
+  const saved = config.SEASONS;
+  try {
+    await withServer(async (base) => {
+      config.SEASONS = [{ name: 'S1', from: '2000-01-01' }, { name: 'S2', from: '2000-06-01', theme: 'autumn' }];
+      assert.match(await (await fetch(base)).text(), /<html lang="en" data-theme="autumn">/);
+      config.SEASONS = [{ name: 'S1', from: '2000-01-01', theme: 'autumn' }, { name: 'S2', from: '2000-06-01' }];
+      assert.match(await (await fetch(base)).text(), /<html lang="en">/); // past season's theme doesn't stick
+    });
+  } finally { config.SEASONS = saved; }
+});
+
 test('healthz is 503 when WhatsApp is down', async () => {
   const { code, body } = await healthz(false);
   assert.strictEqual(code, 503);

@@ -39,7 +39,9 @@ runs from its `from` to the day before the next one starts, and the newest one
 that has started is live, so add the next season ahead of time and it takes over
 on its day. Nothing is deleted: past seasons stay browsable from the picker on
 the scoreboard (`/?season=1`). The API takes `?season=N`, or `from`/`to` for an
-arbitrary range: `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+arbitrary range: `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`. A season can
+also set `theme`, which restyles the site while it is live: `autumn` (Season 2) is
+warm colours, falling leaves, and a glowing world pumpkin in place of the earth.
 
 ## How the bot reads messages
 
