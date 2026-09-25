@@ -81,6 +81,14 @@ function seasonsAsOf(list, today) {
   return started.map((s, i) => ({ id: i + 1, ...s, to: started[i + 1] ? dayBefore(started[i + 1].from) : today }));
 }
 
+// The season a request is looking at: ?season=N, else the live one. The page and
+// the standings API have to agree, or the theme stamped on <html> won't match the
+// standings underneath it. Reads config.SEASONS per call, so tests can swap it.
+function seasonFor(query) {
+  const seasons = seasonsAsOf(config.SEASONS, toDateStr(new Date()));
+  return { seasons, season: seasons.find((s) => String(s.id) === query.season) || seasons.at(-1) };
+}
+
 function createApp(db, status) {
   const app = express();
   app.use(express.json({ limit: '12mb' })); // WhatsApp exports run ~1MB of text
@@ -106,10 +114,12 @@ function createApp(db, status) {
   // ---- Custom games (isolated module: src/game/, data/game.db). ----
   app.use('/game', require('./game/routes')({ basicAuth }));
 
-  // The live season's theme goes on <html> server-side, so the page never flashes the
-  // default look while it waits for /api/standings.
-  app.get('/', (_req, res) => {
-    const { theme } = seasonsAsOf(config.SEASONS, toDateStr(new Date())).at(-1);
+  // The viewed season's theme goes on <html> server-side, so the page never flashes
+  // the wrong look while it waits for /api/standings. Picking a past season is a real
+  // navigation (see setParam) precisely so the theme is re-stamped here: the leaves
+  // and the world pumpkin are built once at load and can't be swapped in place.
+  app.get('/', (req, res) => {
+    const { theme } = seasonFor(req.query).season;
     const html = fs.readFileSync(path.join(__dirname, '..', 'views', 'scoreboard.html'), 'utf8');
     res.type('html').send(theme ? html.replace('<html lang="en">', `<html lang="en" data-theme="${theme}">`) : html);
   });
@@ -166,8 +176,7 @@ function createApp(db, status) {
   });
 
   app.get('/api/standings', (req, res) => {
-    const seasons = seasonsAsOf(config.SEASONS, toDateStr(new Date()));
-    const season = seasons.find((s) => String(s.id) === req.query.season) || seasons.at(-1);
+    const { seasons, season } = seasonFor(req.query);
     const from = req.query.from || season.from;
     const to = req.query.to || season.to;
     const rows = resolveRows(db.getResults(from, to));

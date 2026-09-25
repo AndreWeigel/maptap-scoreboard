@@ -156,6 +156,20 @@ test('/ stamps the live season theme on <html>, and only while that season is li
   } finally { config.SEASONS = saved; }
 });
 
+test('/ stamps the theme of the season being viewed, so a past season looks default', async () => {
+  const config = require('../config');
+  const saved = config.SEASONS;
+  try {
+    await withServer(async (base) => {
+      config.SEASONS = [{ name: 'S1', from: '2000-01-01' }, { name: 'S2', from: '2000-06-01', theme: 'autumn' }];
+      assert.match(await (await fetch(base)).text(), /<html lang="en" data-theme="autumn">/);
+      assert.match(await (await fetch(`${base}/?season=2`)).text(), /<html lang="en" data-theme="autumn">/);
+      assert.match(await (await fetch(`${base}/?season=1`)).text(), /<html lang="en">/);
+      assert.match(await (await fetch(`${base}/?season=bogus`)).text(), /<html lang="en" data-theme="autumn">/); // falls back to live
+    });
+  } finally { config.SEASONS = saved; }
+});
+
 test('healthz is 503 when WhatsApp is down', async () => {
   const { code, body } = await healthz(false);
   assert.strictEqual(code, 503);

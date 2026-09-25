@@ -40,8 +40,11 @@ that has started is live, so add the next season ahead of time and it takes over
 on its day. Nothing is deleted: past seasons stay browsable from the picker on
 the scoreboard (`/?season=1`). The API takes `?season=N`, or `from`/`to` for an
 arbitrary range: `GET /api/standings?from=YYYY-MM-DD&to=YYYY-MM-DD`. A season can
-also set `theme`, which restyles the site while it is live: `autumn` (Season 2) is
-warm colours, falling leaves, and a glowing world pumpkin in place of the earth.
+also set `theme`, which restyles the site whenever that season is the one on
+screen: `autumn` (Season 2) is warm colours, falling leaves, and a glowing world
+pumpkin in place of the earth. Picking a season in the header is a real page load,
+so the theme is re-stamped server-side — switch to a season without one and the
+board goes back to the default look.
 
 ## How the bot reads messages
 

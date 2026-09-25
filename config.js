@@ -6,8 +6,9 @@ module.exports = {
   TZ: process.env.TZ || 'Europe/Berlin',  // daily-boundary timezone
   // Seasons, in date order. Each runs until the day before the next one starts;
   // the newest one that has started is live. Add the next one ahead of time and
-  // it takes over on its day. `theme` restyles the site while its season is live
-  // (only 'autumn' exists; see the data-theme block in views/scoreboard.html).
+  // it takes over on its day. `theme` restyles the site whenever that season is
+  // the one being viewed, live or from the picker — a season without one looks
+  // default (only 'autumn' exists; see the data-theme block in scoreboard.html).
   SEASONS: [
     { name: 'Season 1', from: '2026-01-01' },
     { name: 'Season 2', from: '2026-09-23', theme: 'autumn' },  // autumn equinox

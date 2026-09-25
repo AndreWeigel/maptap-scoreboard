@@ -231,7 +231,7 @@
     <h1 class="wordmark"><span class="map">Map</span><span class="tap">Tap</span> <span class="sub">Scoreboard</span></h1>
     <div class="edition">🍂 AUTUMN EDITION</div>
     <div class="meta">
-      <select class="season-pick" id="season-pick" aria-label="Season" onchange="setParam('season', this.selectedIndex === 0 ? '' : this.value)" hidden></select>
+      <select class="season-pick" id="season-pick" aria-label="Season" onchange="setParam('season', this.selectedIndex === 0 ? '' : this.value, true)" hidden></select>
       <span id="season"></span>
       <span class="status"><span class="dot" id="wadot"></span>WhatsApp</span>
     </div>
@@ -413,9 +413,12 @@ function renderCalendar(hist, from, to) {
 // picks them up — /api/standings reads the same query string this page carries.
 // An empty value drops the param: the newest season and the default ranking are
 // both "no param", so a shared link of either stays live.
-function setParam(k, v) {
+// `reload` navigates instead of re-rendering: a different season can mean a
+// different theme, and only the server can stamp that on <html>.
+function setParam(k, v, reload) {
   const u = new URL(location);
   if (v) u.searchParams.set(k, v); else u.searchParams.delete(k);
+  if (reload) { location.search = u.search; return; }
   history.replaceState(null, '', u.search || u.pathname);
   load();
 }
