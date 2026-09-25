@@ -2,7 +2,7 @@
 
 A bot that watches one WhatsApp group, parses the daily
 [maptap.gg](https://www.maptap.gg) scores people post, and serves a scoreboard:
-wins, podiums, streaks, and 🔥/😱 badges.
+season points, wins, podiums, streaks, and 🔥/😱 badges.
 
 Node, with Baileys for WhatsApp (a linked device), SQLite for storage, Express
 for the web server, node-cron for the digests.
@@ -188,10 +188,25 @@ admin pool until it's claimed, which is where you were until your first live pos
 
 Standings ([scoring.js](src/scoring.js)): pure functions over the rows. `rankDay`
 handles ties (shared rank, next rank skips), `computeStandings` does
-wins/podiums/averages/streaks/records, `dailyHistory` does per-day rankings.
+points/wins/podiums/averages/streaks/records, `dailyHistory` does per-day rankings.
 `GET /api/standings` returns the lot; the page
 ([scoreboard.html](views/scoreboard.html)) toggles Leaderboard / Daily winners
 and repolls every 5 min.
+
+Two ranking methods, picked in the leaderboard header (`?sort=` in the URL, so a
+link keeps the choice):
+
+- **F1 points** (default) — each day pays the Formula 1 table by finishing place,
+  25/18/15/12/10/8/6/4/2/1 for the top ten and 1 point for everyone else who
+  played. Podiums count, and so does turning up: a day you skip pays nothing.
+  Ties break on wins, then average.
+- **Medals** — most 1st places, then most 2nds, then 3rds, on down the field
+  (Olympic order). One win beats any number of runner-up finishes; points break
+  a dead heat.
+
+Both are derived from the rows on every request, so changing the table re-ranks
+every season, past ones included. The points table lives in `scoring.js` rather
+than `config.js` on purpose: borrowed weights are ones nobody argues about.
 
 Digests: two cron jobs (nightly, Monday), always scheduled but gated on a flag in
 `data/settings.json` that you toggle at `/summary` (Basic Auth). The same page

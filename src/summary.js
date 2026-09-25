@@ -25,6 +25,7 @@ function weeklySummary(rows, from, to, cfg) {
   const wins = s.leaderboard.filter((p) => p.wins > 0)
     .map((p) => `${p.name} ${p.wins}`).join(' · ');
   const topAvg = [...s.leaderboard].sort((a, b) => b.avgFinal - a.avgFinal)[0];
+  const points = s.leaderboard.slice(0, 3).map((p) => `${p.name} ${p.points}`).join(' · ');
   const rec = s.badges.record;
   const streak = s.badges.currentWinStreak;
 
@@ -33,6 +34,7 @@ function weeklySummary(rows, from, to, cfg) {
     ? `${a.getDate()}–${b.getDate()} ${MO[b.getMonth()]}`
     : `${a.getDate()} ${MO[a.getMonth()]} – ${b.getDate()} ${MO[b.getMonth()]}`;
   const lines = [`📅 Week of ${range}`];
+  if (points) lines.push(`🏅 Points: ${points}`);
   if (wins) lines.push(`🏆 Wins: ${wins}`);
   if (topAvg) lines.push(`📈 Best avg: ${topAvg.name} ${topAvg.avgFinal}`);
   if (rec) lines.push(`🔥 Record: ${rec.name} ${rec.score} (${WD[day(rec.date).getDay()]})`);

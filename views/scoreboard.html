@@ -157,7 +157,7 @@
   .panel-head h2 { font-family: var(--pixel); font-size: .82rem; margin: 0; color: var(--accent); letter-spacing: 1px; text-shadow: 0 0 12px rgba(var(--accent-rgb), .7); }
   .panel-head span { font-family: var(--mono); color: var(--muted); font-size: 1.05rem; letter-spacing: .5px; }
   .scroll { position: relative; z-index: 1; overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 660px; }
+  table { border-collapse: collapse; width: 100%; min-width: 700px; }
   thead th { font-family: var(--mono); font-size: .98rem; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); font-weight: 400; padding: 12px 16px 12px; text-align: right; white-space: nowrap; text-shadow: 0 0 8px rgba(var(--accent-rgb), .4); }
   thead th:nth-child(2) { text-align: left; }
   tbody td { font-family: var(--mono); font-size: 1.3rem; line-height: 1; padding: 9px 16px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text); border-top: 1px solid rgba(var(--accent-rgb), .1); }
@@ -231,7 +231,7 @@
     <h1 class="wordmark"><span class="map">Map</span><span class="tap">Tap</span> <span class="sub">Scoreboard</span></h1>
     <div class="edition">🍂 AUTUMN EDITION</div>
     <div class="meta">
-      <select class="season-pick" id="season-pick" aria-label="Season" onchange="pickSeason(this)" hidden></select>
+      <select class="season-pick" id="season-pick" aria-label="Season" onchange="setParam('season', this.selectedIndex === 0 ? '' : this.value)" hidden></select>
       <span id="season"></span>
       <span class="status"><span class="dot" id="wadot"></span>WhatsApp</span>
     </div>
@@ -250,12 +250,16 @@
   <section class="panel" id="view-leaderboard">
     <div class="panel-head">
       <h2>Leaderboard</h2>
+      <select class="season-pick" id="sort-pick" aria-label="Ranking method" onchange="setParam('sort', this.value)">
+        <option value="">F1 points</option>
+        <option value="medals">Medals (1st, then 2nd…)</option>
+      </select>
       <span id="count"></span>
     </div>
     <div class="scroll">
       <table>
         <thead><tr>
-          <th>#</th><th>Player</th><th>Wins</th><th>Podium</th><th>Avg</th>
+          <th>#</th><th>Player</th><th>Pts</th><th>Wins</th><th>Podium</th><th>Avg</th>
           <th>Best</th><th>Played</th><th>Part.</th>
           <th aria-label="Hot rounds" title="Hot rounds">🔥</th>
           <th aria-label="Panic rounds" title="Panic rounds">😱</th>
@@ -405,9 +409,14 @@ function renderCalendar(hist, from, to) {
   grid.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
 })();
 
-// Newest season is first in the picker; picking it clears ?season= so the link stays live.
-function pickSeason(sel) {
-  history.replaceState(null, '', sel.selectedIndex === 0 ? location.pathname : `?season=${sel.value}`);
+// Set one param and leave the others (season, sort) in the URL, where load()
+// picks them up — /api/standings reads the same query string this page carries.
+// An empty value drops the param: the newest season and the default ranking are
+// both "no param", so a shared link of either stays live.
+function setParam(k, v) {
+  const u = new URL(location);
+  if (v) u.searchParams.set(k, v); else u.searchParams.delete(k);
+  history.replaceState(null, '', u.search || u.pathname);
   load();
 }
 
@@ -433,16 +442,19 @@ async function load() {
     b.longestParticipationStreak && badge('Longest run', b.longestParticipationStreak.length + ' days', b.longestParticipationStreak.name),
   ].filter(Boolean).join('');
 
+  const medals = new URLSearchParams(location.search).get('sort') === 'medals';
+  document.getElementById('sort-pick').value = medals ? 'medals' : '';
   document.getElementById('rows').innerHTML = s.leaderboard.map((p, i) => `
-    <tr class="${i === 0 && p.wins > 0 ? 'leader' : ''}" style="animation-delay:${Math.min(i * 30, 400)}ms">
+    <tr class="${i === 0 && p.points > 0 ? 'leader' : ''}" style="animation-delay:${Math.min(i * 30, 400)}ms">
       <td><span class="rank ${medal(i)}">${i + 1}</span></td>
       <td class="player">${esc(p.name)}</td>
-      <td class="wins">${p.wins}</td>
+      <td class="${medals ? '' : 'wins'}">${p.points}</td>
+      <td class="${medals ? 'wins' : ''}">${p.wins}</td>
       <td class="pod">${p.podiums.join(' / ')}</td>
       <td>${p.avgFinal}</td><td>${p.best}</td>
       <td>${p.played}</td><td>${p.participationPct}%</td>
       <td>${fp(p.fireRounds, 'fire')}</td><td>${fp(p.panicRounds, 'panic')}</td>
-    </tr>`).join('') || '<tr><td colspan="10" class="empty">No results yet — post a maptap.gg score in the group.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="11" class="empty">No results yet — post a maptap.gg score in the group.</td></tr>';
 
   const hist = s.history || [];
   document.getElementById('daycount').textContent = `${hist.length} day${hist.length === 1 ? '' : 's'}`;

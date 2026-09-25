@@ -175,7 +175,7 @@ function createApp(db, status) {
       range: { from, to },
       season,
       seasons,
-      ...computeStandings(rows, config),
+      ...computeStandings(rows, config, req.query.sort),
       history: dailyHistory(rows),
       updatedAt: new Date().toISOString(),
     });

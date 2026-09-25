@@ -29,7 +29,26 @@ function dailyHistory(rows) {
   }));
 }
 
-function computeStandings(rows, cfg) {
+// Season points: the F1 table for the top 10, 1 point for anyone else who
+// played. Borrowed on purpose — nobody argues with weights that aren't ours.
+const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+
+// Default order: podiums down to 10th count, and showing up counts (a day
+// skipped scores nothing at all).
+const byPoints = (a, b) => b.points - a.points || b.wins - a.wins || b.avgFinal - a.avgFinal;
+
+// Olympic order: most 1sts, then most 2nds, then 3rds, on down the field. One
+// win beats any number of seconds; points break a dead heat.
+const byMedals = (a, b) => {
+  const depth = Math.max(a.ranks.length, b.ranks.length);
+  for (let i = 1; i < depth; i++) {
+    const d = (b.ranks[i] || 0) - (a.ranks[i] || 0);
+    if (d) return d;
+  }
+  return byPoints(a, b);
+};
+
+function computeStandings(rows, cfg, sort) {
   const byDate = new Map();
   for (const r of rows) {
     if (!byDate.has(r.play_date)) byDate.set(r.play_date, []);
@@ -47,7 +66,7 @@ function computeStandings(rows, cfg) {
       let p = players.get(r.player_id);
       if (!p) {
         p = {
-          playerId: r.player_id, name: r.player_name, wins: 0, podiums: [0, 0, 0],
+          playerId: r.player_id, name: r.player_name, ranks: [], points: 0,
           played: 0, totalFinal: 0, best: 0, fire: 0, panic: 0, playedDays: new Set(),
         };
         players.set(r.player_id, p);
@@ -57,8 +76,10 @@ function computeStandings(rows, cfg) {
       p.playedDays.add(date);
       p.totalFinal += r.final_score;
       if (r.final_score > p.best) p.best = r.final_score;
-      if (r.rank <= 3) p.podiums[r.rank - 1]++;
-      if (r.rank === 1) p.wins++;
+      // ranks[n] = days finished nth. Dense, so both comparators can walk it.
+      while (p.ranks.length <= r.rank) p.ranks.push(0);
+      p.ranks[r.rank]++;
+      p.points += POINTS[r.rank - 1] ?? 1;
       for (const round of [r.round1, r.round2, r.round3, r.round4, r.round5]) {
         if (round >= cfg.FIRE_THRESHOLD) p.fire++;
         if (round <= cfg.PANIC_THRESHOLD) p.panic++;
@@ -73,8 +94,10 @@ function computeStandings(rows, cfg) {
     .map((p) => ({
       playerId: p.playerId,
       name: p.name,
-      wins: p.wins,
-      podiums: p.podiums,
+      points: p.points,
+      ranks: p.ranks,
+      wins: p.ranks[1] || 0,
+      podiums: [1, 2, 3].map((n) => p.ranks[n] || 0),
       avgFinal: Math.round((p.totalFinal / p.played) * 10) / 10,
       best: p.best,
       played: p.played,
@@ -82,7 +105,7 @@ function computeStandings(rows, cfg) {
       fireRounds: p.fire,
       panicRounds: p.panic,
     }))
-    .sort((a, b) => b.wins - a.wins || b.avgFinal - a.avgFinal);
+    .sort(sort === 'medals' ? byMedals : byPoints);
 
   // Current win streak: winners of the latest active day, counting back over
   // active days only (a day nobody played doesn't break it).

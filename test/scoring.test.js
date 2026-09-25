@@ -78,7 +78,7 @@ test('record and participation streak badges', () => {
   assert.equal(s.badges.longestParticipationStreak.length, 3);
 });
 
-test('leaderboard ranked by wins', () => {
+test('leaderboard ranked by points by default', () => {
   const s = computeStandings([
     row('2026-07-01', 'alice', 700), row('2026-07-01', 'bob', 600),
     row('2026-07-02', 'alice', 700), row('2026-07-02', 'bob', 600),
@@ -97,4 +97,54 @@ test('dailyHistory: newest day first, winners flagged, ties share rank 1', () =>
   assert.deepEqual(h[0].ranked.filter((r) => r.rank === 1).map((r) => r.name), ['x', 'y']);
   assert.equal(h[1].ranked[0].name, 'a');
   assert.equal(h[1].ranked[0].score, 500);
+});
+
+// ---- Season points ----
+
+const dayRows = (date, scores) => Object.entries(scores).map(([id, f]) => row(date, id, f));
+// Eight mid-field players, so a day has a realistic field and someone can be 10th.
+const fillers = (base) => Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`f${i}`, base - i * 10]));
+
+test('points follow the F1 table, 1 point for the rest of the field', () => {
+  const s = computeStandings(dayRows('2026-07-01', { leader: 700, bob: 690, ...fillers(680), alice: 500 }), CFG);
+  const pts = Object.fromEntries(s.leaderboard.map((p) => [p.playerId, p.points]));
+  assert.deepEqual(pts, {
+    leader: 25, bob: 18, f0: 15, f1: 12, f2: 10, f3: 8, f4: 6, f5: 4, f6: 2, f7: 1,
+    alice: 1, // 11th, past the end of the table
+  });
+});
+
+// The whole reason points exist: consistent runner-up finishes beat one win and
+// nothing else, which the old wins-first sort could never do.
+const RUNNER_UP_SEASON = [
+  ...dayRows('2026-07-01', { alice: 700, bob: 690, ...fillers(680) }),          // alice wins
+  ...dayRows('2026-07-02', { leader: 700, bob: 690, ...fillers(680), alice: 500 }), // alice last
+  ...dayRows('2026-07-03', { leader: 700, bob: 690, ...fillers(680), alice: 500 }),
+];
+
+test('points: three 2nd places beat one win and two last places', () => {
+  const s = computeStandings(RUNNER_UP_SEASON, CFG);
+  const bob = s.leaderboard.find((p) => p.playerId === 'bob');
+  const alice = s.leaderboard.find((p) => p.playerId === 'alice');
+  assert.equal(bob.points, 54);            // 18 * 3
+  assert.equal(alice.points, 27);          // 25 + 1 + 1
+  assert.ok(s.leaderboard.indexOf(bob) < s.leaderboard.indexOf(alice));
+});
+
+test('medals: one win beats any number of 2nd places', () => {
+  const s = computeStandings(RUNNER_UP_SEASON, CFG, 'medals');
+  const ids = s.leaderboard.map((p) => p.playerId);
+  assert.equal(ids[0], 'leader');          // 2 wins
+  assert.ok(ids.indexOf('alice') < ids.indexOf('bob'));  // 1 win > 3 seconds
+});
+
+test('medals falls through 2nds and 3rds before points decide', () => {
+  const s = computeStandings([
+    // Nobody wins twice; a and b tie on 1sts and 2nds, so 3rds separate them.
+    ...dayRows('2026-07-01', { a: 700, b: 690, c: 680 }),
+    ...dayRows('2026-07-02', { b: 700, a: 690, c: 680 }),
+    ...dayRows('2026-07-03', { c: 700, a: 680, b: 670 }),  // a 2nd, b 3rd
+  ], CFG, 'medals');
+  assert.deepEqual(s.leaderboard.map((p) => p.playerId), ['a', 'b', 'c']);
+  assert.deepEqual(s.leaderboard[0].podiums, [1, 2, 0]);
 });
