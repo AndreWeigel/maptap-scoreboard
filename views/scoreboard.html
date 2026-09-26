@@ -107,6 +107,17 @@
   .status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(var(--shade-rgb), .72); }
   .season-pick { font: inherit; color: var(--text); padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(var(--shade-rgb), .72); cursor: pointer; }
   @media (pointer: coarse) { .season-pick { min-height: 44px; } }  /* the one tappable thing in the hero */
+
+  /* ---- Ranking-method toggle: sits beside the panel heading, deliberately quiet ---- */
+  .head-left { display: flex; align-items: center; gap: 14px; }
+  .seg { position: relative; display: flex; padding: 2px; border: 1px solid var(--border); border-radius: 999px; background: rgba(var(--shade-rgb), .72); }
+  .seg button { position: relative; width: 66px; height: 26px; padding: 0; background: none; border: 0; border-radius: 999px; cursor: pointer; font-family: var(--mono); font-size: .9rem; letter-spacing: .06em; color: var(--dim); transition: color .18s; }
+  .seg button[aria-pressed="true"] { color: var(--accent); }
+  .seg:hover button[aria-pressed="false"] { color: var(--muted); }
+  /* Both labels are six characters, so one fixed-width knob lands exactly on either. */
+  .seg i { position: absolute; top: 2px; bottom: 2px; left: 2px; width: 66px; border-radius: 999px; background: rgba(var(--accent-rgb), .1); box-shadow: 0 0 8px rgba(var(--accent-rgb), .22); transition: left .2s cubic-bezier(.4, 1.3, .5, 1); }
+  .seg.medals i { left: 68px; }
+  @media (pointer: coarse) { .seg button { min-height: 44px; } }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #f0616a; box-shadow: 0 0 9px #f0616a; }
   .dot.on { background: #4ade80; box-shadow: 0 0 9px #4ade80; }
 
@@ -216,6 +227,7 @@
     .hero { padding: 14px 0 22px; }
     .wordmark .sub { display: block; }  /* "Scoreboard" stacks under MapTap so the centered wordmark can't overflow */
     .meta { flex-direction: column; gap: 8px; }  /* season + status stack so the pill never clips on narrow screens */
+    .panel-head { flex-wrap: wrap; gap: 10px; }  /* heading + ranking toggle keep the line; the count drops below */
   }
 </style>
 </head>
@@ -249,11 +261,14 @@
 
   <section class="panel" id="view-leaderboard">
     <div class="panel-head">
-      <h2>Leaderboard</h2>
-      <select class="season-pick" id="sort-pick" aria-label="Ranking method" onchange="setParam('sort', this.value)">
-        <option value="">F1 points</option>
-        <option value="medals">Medals (1st, then 2nd…)</option>
-      </select>
+      <div class="head-left">
+        <h2>Leaderboard</h2>
+        <div class="seg" id="sort-seg" role="group" aria-label="Ranking method">
+          <i aria-hidden="true"></i>
+          <button aria-pressed="true" onclick="pickSort('')" title="Season points: the F1 table by finishing place">Points</button>
+          <button aria-pressed="false" onclick="pickSort('medals')" title="Most 1st places, then 2nds, then 3rds">Medals</button>
+        </div>
+      </div>
       <span id="count"></span>
     </div>
     <div class="scroll">
@@ -423,6 +438,11 @@ function setParam(k, v, reload) {
   load();
 }
 
+function pickSort(v) {
+  document.getElementById('sort-seg').classList.toggle('medals', v === 'medals');
+  setParam('sort', v);
+}
+
 async function load() {
  try {
   // The page's ?season=N goes straight to the API; no param = the live season.
@@ -446,7 +466,9 @@ async function load() {
   ].filter(Boolean).join('');
 
   const medals = new URLSearchParams(location.search).get('sort') === 'medals';
-  document.getElementById('sort-pick').value = medals ? 'medals' : '';
+  const seg = document.getElementById('sort-seg');
+  seg.classList.toggle('medals', medals);
+  seg.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(medals === (i === 1))));
   document.getElementById('rows').innerHTML = s.leaderboard.map((p, i) => `
     <tr class="${i === 0 && p.points > 0 ? 'leader' : ''}" style="animation-delay:${Math.min(i * 30, 400)}ms">
       <td><span class="rank ${medal(i)}">${i + 1}</span></td>
