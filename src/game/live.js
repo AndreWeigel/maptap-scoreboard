@@ -41,7 +41,15 @@ function snapshot(db, session, token) {
 
 module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
   const router = express.Router();
-  const broadcast = (_code) => {}; // Task 3 replaces this with the SSE fan-out
+  // code → Set<{ res, token }>. The only in-memory state; rebuilds itself as clients reconnect.
+  const streams = new Map();
+  const send = (res, snap) => res.write(`event: state\ndata: ${JSON.stringify(snap)}\n\n`);
+  const broadcast = (code) => {
+    const set = streams.get(code);
+    const s = set && set.size ? db.getSession(code) : null;
+    if (!s) return;
+    for (const c of set) send(c.res, snapshot(db, s, c.token));
+  };
 
   const load = (req, res) => {
     const s = db.getSession(req.params.code);
@@ -119,6 +127,32 @@ module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
   router.get('/live/api/:code/state', (req, res) => {
     const s = load(req, res); if (!s) return;
     res.json(snapshot(db, s, tokenOf(req)));
+  });
+  router.get('/live/api/:code/events', (req, res) => {
+    const s = load(req, res); if (!s) return;
+    res.writeHead(200, {
+      'content-type': 'text/event-stream', 'cache-control': 'no-cache',
+      connection: 'keep-alive', 'x-accel-buffering': 'no', // nginx: don't buffer this response
+    });
+    const client = { res, token: tokenOf(req) };
+    if (!streams.has(s.code)) streams.set(s.code, new Set());
+    streams.get(s.code).add(client);
+    send(res, snapshot(db, s, client.token));
+    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+    ping.unref();
+    req.on('close', () => { clearInterval(ping); streams.get(s.code)?.delete(client); });
+  });
+
+  // Round photos live behind the friends password at /uploads; a live session
+  // may show a photo once its round is revealed, and only that photo.
+  router.get('/live/api/:code/photo/:file', (req, res) => {
+    const s = db.getSession(req.params.code);
+    const file = req.params.file;
+    if (!s || !PHOTO_FILE.test(file)) return res.status(404).end();
+    const { rounds } = db.getGame(s.game_id);
+    const shown = new Set(revealedOrds(s, rounds));
+    if (!rounds.some((r) => shown.has(r.ord) && r.photo === file)) return res.status(404).end();
+    res.sendFile(path.join(uploadsDir, file), { maxAge: '1h' }, (err) => { if (err) res.status(404).end(); });
   });
 
   return router;

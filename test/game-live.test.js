@@ -148,3 +148,66 @@ test('late joiner scores 0 on earlier rounds; finished → 400 on next; end from
     assert.equal(ended.state, 'finished');
   });
 });
+
+// Read one SSE event ("event: …\ndata: …\n\n") from a streaming fetch body.
+async function readEvent(reader, buf) {
+  for (;;) {
+    const i = buf.text.indexOf('\n\n');
+    if (i !== -1) {
+      const block = buf.text.slice(0, i); buf.text = buf.text.slice(i + 2);
+      if (block.startsWith(':')) continue; // ping
+      const data = block.split('\n').find((l) => l.startsWith('data: '));
+      return { event: block.match(/^event: (.*)$/m)[1], data: JSON.parse(data.slice(6)) };
+    }
+    const { value, done } = await reader.read();
+    if (done) throw new Error('stream ended');
+    buf.text += new TextDecoder().decode(value);
+  }
+}
+
+test('events: snapshot on connect, again on every change; headers tell nginx not to buffer', async () => {
+  await withServer(async ({ base, game }) => {
+    const { code } = await (await post(`${base}/game/api/admin/games/${game.id}/sessions`, undefined, auth)).json();
+    const fer = await (await post(`${base}/game/live/api/${code}/join`, { name: 'Fer' })).json();
+    const ac = new AbortController();
+    const resp = await fetch(`${base}/game/live/api/${code}/events?token=${fer.token}`, { signal: ac.signal });
+    assert.equal(resp.status, 200);
+    assert.match(resp.headers.get('content-type'), /^text\/event-stream/);
+    assert.equal(resp.headers.get('x-accel-buffering'), 'no');
+    assert.equal(resp.headers.get('cache-control'), 'no-cache');
+    const reader = resp.body.getReader(); const buf = { text: '' };
+    let ev = await readEvent(reader, buf);
+    assert.equal(ev.event, 'state');
+    assert.equal(ev.data.state, 'lobby');
+    assert.deepEqual(ev.data.you, { playerId: fer.playerId, name: 'Fer' });
+
+    await post(`${base}/game/live/api/${code}/join`, { name: 'Ana' });
+    ev = await readEvent(reader, buf);
+    assert.deepEqual(ev.data.players.map((p) => p.name), ['Fer', 'Ana']);
+
+    await next(base, code);
+    ev = await readEvent(reader, buf);
+    assert.equal(ev.data.state, 'open');
+    await post(`${base}/game/live/api/${code}/guess`, { token: fer.token, ord: 0, lat: 1, lng: 1 });
+    ev = await readEvent(reader, buf);
+    assert.deepEqual(ev.data.players.map((p) => p.answered), [true, false]);
+    ac.abort();
+    assert.equal((await fetch(`${base}/game/live/api/nope/events`)).status, 404);
+  });
+});
+
+test('photo route serves a round photo only once that round is revealed', async () => {
+  await withServer(async ({ base, game }) => {
+    const { code } = await (await post(`${base}/game/api/admin/games/${game.id}/sessions`, undefined, auth)).json();
+    const url = `${base}/game/live/api/${code}/photo/a1b2c3d4e5f60718.jpg`;
+    assert.equal((await fetch(url)).status, 404); // lobby
+    await next(base, code); // open 0
+    assert.equal((await fetch(url)).status, 404);
+    await next(base, code); // revealed 0
+    const r = await fetch(url);
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), 'notreallyajpeg');
+    assert.equal((await fetch(`${base}/game/live/api/${code}/photo/ffffffffffffffff.jpg`)).status, 404); // not a round photo
+    assert.equal((await fetch(`${base}/game/live/api/${code}/photo/..%2Fsecret.jpg`)).status, 404);
+  });
+});
