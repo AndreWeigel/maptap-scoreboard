@@ -19,6 +19,7 @@ differently.
 | People album | `views/globe.html` | `GET /globe` (friends password, [web.js:231](src/web.js#L231)) | globe | static namespace import |
 | Play a game | `views/game/play.html` | `GET /game/:slug` ([routes.js](src/game/routes.js)) | globe | static namespace import |
 | Builder location picker | `views/game/builder.html` | `GET /game/admin` (Basic Auth) | **flat** (mercator) | lazy `await import()` on first open |
+| Live session (player + host) | `views/game/live.html` | `GET /game/live/:code`, `GET /game/host/:code` ([live.js](src/game/live.js)) | globe | static namespace import |
 
 The builder's picker is deliberately flat — picking a point is easier on a
 mercator map than on a sphere — and lazy-loaded, so only game builders pay the

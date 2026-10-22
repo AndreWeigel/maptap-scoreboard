@@ -102,6 +102,20 @@ works, and with `FRIENDS_TOKEN` unset it's the only one that does):
 - `GET /uploads/*` — every uploaded photo, including the ones on `/game/:slug`
   pages, so a shared game link now needs the password too
 
+Live sessions (everyone plays a custom game at once, host reveals; no login, the
+code in the link is the access control):
+
+- `GET /game/live/:code` — player page; `GET /game/host/:code` — host page (admin password)
+- `GET /game/live/api/:code` — title, round count, state; `POST …/join` `{ name }` → `{ token }`
+- `POST /game/live/api/:code/guess` `{ token, ord, lat, lng }` — accepted only while that round is open
+- `GET /game/live/api/:code/state?token=` — one snapshot; `GET …/events?token=` — the same as a Server-Sent Events stream
+- `GET /game/live/api/:code/photo/:file` — a round's photo, only once that round is revealed
+- Admin: `POST`/`GET /game/api/admin/games/:id/sessions`, `POST /game/api/admin/sessions/:code/next`, `POST …/end`
+
+Start one from "Go live" on `/game/admin`; the host page has the join link.
+Behind nginx the stream relies on the `X-Accel-Buffering: no` header the app
+sends, so no proxy config is needed.
+
 The scoreboard and `/api/standings` stay public. Keep the site behind your own
 TLS/proxy; Basic Auth assumes HTTPS.
 
