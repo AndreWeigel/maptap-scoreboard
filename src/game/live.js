@@ -48,7 +48,10 @@ module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
     const set = streams.get(code);
     const s = set && set.size ? db.getSession(code) : null;
     if (!s) return;
-    for (const c of set) send(c.res, snapshot(db, s, c.token));
+    for (const c of set) {
+      try { send(c.res, snapshot(db, s, c.token)); }
+      catch { set.delete(c); } // dead stream: drop it, keep fanning out to the rest
+    }
   };
 
   const load = (req, res) => {
@@ -138,7 +141,10 @@ module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
     if (!streams.has(s.code)) streams.set(s.code, new Set());
     streams.get(s.code).add(client);
     send(res, snapshot(db, s, client.token));
-    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+    const ping = setInterval(() => {
+      try { res.write(': ping\n\n'); }
+      catch { clearInterval(ping); streams.get(s.code)?.delete(client); }
+    }, 25000);
     ping.unref();
     req.on('close', () => { clearInterval(ping); streams.get(s.code)?.delete(client); });
   });
