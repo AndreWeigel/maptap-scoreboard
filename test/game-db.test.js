@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { openGameDb } = require('../src/game/db');
+const { openGameDb, revealedOrds } = require('../src/game/db');
 
 const round = (q, lat, lng, extra = {}) => ({ question: q, lat, lng, ...extra });
 
@@ -78,4 +78,93 @@ test('deleteGame cascades rounds; getGame of missing id is null', () => {
   assert.equal(db.getGame(g.id), null);
   assert.equal(db.raw.prepare('SELECT COUNT(*) n FROM rounds').get().n, 0);
   assert.deepEqual(db.deleteGame(999), { deleted: false });
+});
+
+function seedGame(db) {
+  const g = db.createGame('trains');
+  db.saveGame(g.id, 'trains', [
+    round('Highest station?', 33.0106, 91.6642, { radius: 20, answer: 'Tanggula' }),
+    round('First railway?', 54.9, -1.6),
+    round('Longest tunnel?', 46.5, 8.6),
+  ]);
+  return g;
+}
+
+test('createSession starts in lobby with a 10-char code; listSessions counts players', () => {
+  const db = openGameDb(':memory:');
+  const g = seedGame(db);
+  const s = db.createSession(g.id);
+  assert.match(s.code, /^[a-f0-9]{10}$/);
+  assert.equal(s.state, 'lobby');
+  assert.equal(s.current_ord, null);
+  assert.deepEqual(db.getSession(s.code), s);
+  assert.equal(db.getSession('nope'), null);
+  db.joinSession(s.id, 'Fer');
+  const list = db.listSessions(g.id);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].code, s.code);
+  assert.equal(list[0].players, 1);
+});
+
+test('advanceSession walks lobby → open → revealed → … → finished; end jumps to finished', () => {
+  const db = openGameDb(':memory:');
+  const g = seedGame(db);
+  const s = db.createSession(g.id);
+  const step = () => { const n = db.advanceSession(s.code); return [n.state, n.current_ord]; };
+  assert.deepEqual(step(), ['open', 0]);
+  assert.deepEqual(step(), ['revealed', 0]);
+  assert.deepEqual(step(), ['open', 1]);
+  assert.deepEqual(step(), ['revealed', 1]);
+  assert.deepEqual(step(), ['open', 2]);
+  assert.deepEqual(step(), ['revealed', 2]);
+  assert.deepEqual(step(), ['finished', 2]);
+  assert.ok(db.getSession(s.code).finished_at);
+  assert.throws(() => db.advanceSession(s.code), RangeError);
+  assert.equal(db.advanceSession('nope'), null);
+
+  const s2 = db.createSession(g.id);
+  db.advanceSession(s2.code);
+  const ended = db.endSession(s2.code);
+  assert.equal(ended.state, 'finished');
+  assert.ok(ended.finished_at);
+  assert.equal(db.endSession('nope'), null);
+});
+
+test('joinSession: token per player, names unique per session (case-insensitive), playerByToken', () => {
+  const db = openGameDb(':memory:');
+  const g = seedGame(db);
+  const s = db.createSession(g.id);
+  const fer = db.joinSession(s.id, 'Fer');
+  assert.match(fer.token, /^[a-f0-9]{32}$/);
+  assert.throws(() => db.joinSession(s.id, 'fer'), (e) => String(e.code).startsWith('SQLITE_CONSTRAINT'));
+  const other = db.createSession(g.id);
+  db.joinSession(other.id, 'Fer'); // same name in another session is fine
+  assert.deepEqual(db.playerByToken(fer.token), { id: fer.id, session_id: s.id, name: 'Fer' });
+  assert.equal(db.playerByToken('nope'), null);
+  assert.deepEqual(db.listPlayers(s.id).map((p) => p.name), ['Fer']);
+});
+
+test('upsertGuess keeps the latest tap; listGuesses sorts by km; standings sum revealed rounds only', () => {
+  const db = openGameDb(':memory:');
+  const g = seedGame(db);
+  const s = db.createSession(g.id);
+  const fer = db.joinSession(s.id, 'Fer');
+  const ana = db.joinSession(s.id, 'Ana');
+  db.upsertGuess(s.id, fer.id, 0, { lat: 1, lng: 1, km: 900, points: 10 });
+  db.upsertGuess(s.id, fer.id, 0, { lat: 33, lng: 91, km: 12, points: 100 });
+  db.upsertGuess(s.id, ana.id, 0, { lat: 30, lng: 90, km: 300, points: 57 });
+  db.upsertGuess(s.id, ana.id, 1, { lat: 54, lng: -1, km: 80, points: 90 });
+  assert.deepEqual(db.listGuesses(s.id, 0).map((x) => [x.name, x.km, x.points]), [['Fer', 12, 100], ['Ana', 300, 57]]);
+  assert.deepEqual(db.standings(s.id, [0]).map((x) => [x.name, x.total]), [['Fer', 100], ['Ana', 57]]);
+  assert.deepEqual(db.standings(s.id, [0, 1]).map((x) => [x.name, x.total]), [['Ana', 147], ['Fer', 100]]);
+  assert.deepEqual(db.standings(s.id, []).map((x) => [x.name, x.total]), [['Fer', 0], ['Ana', 0]]);
+});
+
+test('revealedOrds follows the state', () => {
+  const rounds = [{ ord: 0 }, { ord: 1 }, { ord: 2 }];
+  assert.deepEqual(revealedOrds({ state: 'lobby', current_ord: null }, rounds), []);
+  assert.deepEqual(revealedOrds({ state: 'open', current_ord: 0 }, rounds), []);
+  assert.deepEqual(revealedOrds({ state: 'revealed', current_ord: 0 }, rounds), [0]);
+  assert.deepEqual(revealedOrds({ state: 'open', current_ord: 2 }, rounds), [0, 1]);
+  assert.deepEqual(revealedOrds({ state: 'finished', current_ord: 2 }, rounds), [0, 1, 2]);
 });

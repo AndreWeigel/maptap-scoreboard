@@ -40,7 +40,40 @@ CREATE TABLE IF NOT EXISTS guesses (
   points    INTEGER NOT NULL,
   UNIQUE(play_id, round_ord)
 );
+CREATE TABLE IF NOT EXISTS sessions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id     INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  code        TEXT NOT NULL UNIQUE,
+  state       TEXT NOT NULL,
+  current_ord INTEGER,
+  created_at  TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE TABLE IF NOT EXISTS session_players (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  token      TEXT NOT NULL UNIQUE,
+  joined_at  TEXT NOT NULL,
+  UNIQUE(session_id, name COLLATE NOCASE)
+);
+CREATE TABLE IF NOT EXISTS session_guesses (
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  player_id  INTEGER NOT NULL REFERENCES session_players(id) ON DELETE CASCADE,
+  round_ord  INTEGER NOT NULL,
+  lat REAL NOT NULL, lng REAL NOT NULL,
+  km REAL NOT NULL, points INTEGER NOT NULL,
+  UNIQUE(session_id, player_id, round_ord)
+);
 `;
+
+// The rounds whose truth may be shown: see the spec's "Revealed rounds" rule.
+function revealedOrds(session, rounds) {
+  const ords = rounds.map((r) => r.ord).sort((a, b) => a - b);
+  if (session.state === 'lobby') return [];
+  if (session.state === 'finished') return ords;
+  return ords.filter((o) => (session.state === 'revealed' ? o <= session.current_ord : o < session.current_ord));
+}
 
 function openGameDb(dbPath) {
   if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -78,6 +111,36 @@ function openGameDb(dbPath) {
       answer: r.answer ?? null, radius: r.radius ?? null,
     }));
   });
+
+  const now = () => new Date().toISOString();
+  const getSession = (code) => db.prepare('SELECT * FROM sessions WHERE code = ?').get(code) || null;
+  const roundOrds = (gameId) =>
+    db.prepare('SELECT ord FROM rounds WHERE game_id = ? ORDER BY ord').all(gameId).map((r) => r.ord);
+  const setState = db.prepare('UPDATE sessions SET state = ?, current_ord = ?, finished_at = ? WHERE id = ?');
+
+  // Host's "Next": lobby → open(first) → revealed → open(next) … → finished.
+  const advance = db.transaction((code) => {
+    const s = getSession(code);
+    if (!s) return null;
+    if (s.state === 'finished') throw new RangeError('session finished');
+    const ords = roundOrds(s.game_id);
+    let state = 'finished', ord = s.current_ord, finishedAt = null;
+    if (s.state === 'lobby' && ords.length) { state = 'open'; ord = ords[0]; }
+    else if (s.state === 'open') state = 'revealed';
+    else if (s.state === 'revealed') {
+      const i = ords.indexOf(s.current_ord);
+      if (i + 1 < ords.length) { state = 'open'; ord = ords[i + 1]; }
+    }
+    if (state === 'finished') finishedAt = now();
+    setState.run(state, ord, finishedAt, s.id);
+    return getSession(code);
+  });
+  const upsertGuessStmt = db.prepare(`
+    INSERT INTO session_guesses (session_id, player_id, round_ord, lat, lng, km, points)
+    VALUES (@session_id, @player_id, @round_ord, @lat, @lng, @km, @points)
+    ON CONFLICT(session_id, player_id, round_ord) DO UPDATE SET
+      lat = excluded.lat, lng = excluded.lng, km = excluded.km, points = excluded.points
+  `);
 
   return {
     raw: db,
@@ -130,7 +193,64 @@ function openGameDb(dbPath) {
         'SELECT player_name, total, created_at FROM plays WHERE game_id = ? ORDER BY total DESC, created_at'
       ).all(gameId);
     },
+
+    // ---- Live sessions ----
+    createSession(gameId) {
+      const code = crypto.randomBytes(5).toString('hex'); // the join link IS the access control
+      db.prepare('INSERT INTO sessions (game_id, code, state, created_at) VALUES (?, ?, ?, ?)')
+        .run(gameId, code, 'lobby', now());
+      return getSession(code);
+    },
+    getSession,
+    listSessions(gameId) {
+      return db.prepare(`
+        SELECT s.code, s.state, s.current_ord, s.created_at, s.finished_at,
+          (SELECT COUNT(*) FROM session_players p WHERE p.session_id = s.id) AS players
+        FROM sessions s WHERE s.game_id = ? ORDER BY s.id DESC
+      `).all(gameId);
+    },
+    advanceSession(code) { return advance(code); },
+    endSession(code) {
+      const s = getSession(code);
+      if (!s) return null;
+      setState.run('finished', s.current_ord, now(), s.id);
+      return getSession(code);
+    },
+    joinSession(sessionId, name) {
+      const token = crypto.randomBytes(16).toString('hex');
+      const { lastInsertRowid } = db.prepare(
+        'INSERT INTO session_players (session_id, name, token, joined_at) VALUES (?, ?, ?, ?)'
+      ).run(sessionId, name, token, now());
+      return { id: Number(lastInsertRowid), name, token };
+    },
+    playerByToken(token) {
+      return db.prepare('SELECT id, session_id, name FROM session_players WHERE token = ?').get(token) || null;
+    },
+    listPlayers(sessionId) {
+      return db.prepare('SELECT id, name, joined_at FROM session_players WHERE session_id = ? ORDER BY id').all(sessionId);
+    },
+    upsertGuess(sessionId, playerId, ord, g) {
+      upsertGuessStmt.run({ session_id: sessionId, player_id: playerId, round_ord: ord,
+        lat: g.lat, lng: g.lng, km: g.km, points: g.points });
+    },
+    listGuesses(sessionId, ord) {
+      return db.prepare(`
+        SELECT g.player_id, p.name, g.lat, g.lng, g.km, g.points
+        FROM session_guesses g JOIN session_players p ON p.id = g.player_id
+        WHERE g.session_id = ? AND g.round_ord = ? ORDER BY g.km, p.id
+      `).all(sessionId, ord);
+    },
+    // Cumulative points over the given round ords; everyone who joined appears (0 if no guess).
+    standings(sessionId, ords) {
+      const list = ords.length ? ords.map(() => '?').join(',') : 'NULL';
+      return db.prepare(`
+        SELECT p.id AS player_id, p.name, COALESCE(SUM(g.points), 0) AS total
+        FROM session_players p
+        LEFT JOIN session_guesses g ON g.player_id = p.id AND g.round_ord IN (${list})
+        WHERE p.session_id = ? GROUP BY p.id ORDER BY total DESC, p.id
+      `).all(...ords, sessionId);
+    },
   };
 }
 
-module.exports = { openGameDb };
+module.exports = { openGameDb, revealedOrds };
