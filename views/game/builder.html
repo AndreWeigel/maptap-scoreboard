@@ -35,6 +35,9 @@
     border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px; margin-bottom: 10px; }
   .game .t { font-weight: 700; flex: 1; min-width: 140px; }
   .game .meta { font: .75rem var(--mono); color: var(--muted); }
+  .game .sessions { flex-basis: 100%; font: .75rem var(--mono); color: var(--muted); }
+  .game .sessions a { color: var(--cyan); text-decoration: none; }
+  .game .sessions .fin { opacity: .6; }
   .empty { color: var(--muted); font-style: italic; }
 
   .title { font-size: 1.2rem; font-weight: 700; margin: 0 0 4px; cursor: text; }
@@ -126,8 +129,13 @@ function renderList() {
       <span class="t">${esc(g.title)}</span>
       <span class="meta">${g.rounds} rounds · ${g.plays} plays · ${g.created_at.slice(0, 10)}</span>
       <button class="sm" data-copy="${esc(g.slug)}">Copy link</button>
+      <button class="sm" data-live="${g.id}" ${g.rounds ? '' : 'disabled title="Add rounds first"'}>Go live</button>
       <button class="sm" data-edit="${g.id}">Edit</button>
       <button class="del" data-del="${g.id}" title="Delete game" aria-label="Delete game">✕</button>
+      ${(g.sessions || []).length ? `<div class="sessions">${g.sessions.map((s) => `
+        <span class="${s.state === 'finished' ? 'fin' : ''}">${s.state === 'finished' ? 'finished' : 'LIVE · ' + esc(s.state)} ·
+        ${s.players} player${s.players === 1 ? '' : 's'} · ${esc(s.created_at.slice(0, 10))} ·
+        <a href="/game/host/${esc(s.code)}" target="_blank" rel="noopener">host page</a></span>`).join('<br>')}</div>` : ''}
     </div>`).join('')
     : '<p class="empty">No games yet — press “+ New game”.</p>';
 }
@@ -172,13 +180,17 @@ function renderEditor() {
 
 async function loadList() {
   games = (await (await fetch('/game/api/admin/games')).json()).games;
+  await Promise.all(games.map(async (g) => {
+    g.sessions = (await (await fetch(`/game/api/admin/games/${g.id}/sessions`)).json()).sessions;
+  }));
   editing = null;
   render();
 }
 
 async function openEditor(id) {
   const d = await (await fetch(`/game/api/admin/games/${id}`)).json();
-  editing = { game: d.game, rounds: d.rounds, dirty: false };
+  const { sessions } = await (await fetch(`/game/api/admin/games/${id}/sessions`)).json();
+  editing = { game: d.game, rounds: d.rounds, sessions, dirty: false };
   render();
 }
 
@@ -239,6 +251,14 @@ main.addEventListener('click', async (e) => {
   if (copy) return copyLink(copy);
   const edit = btn('edit');
   if (edit) return openEditor(edit);
+  const live = btn('live');
+  if (live) {
+    const resp = await fetch(`/game/api/admin/games/${live}/sessions`, { method: 'POST' });
+    if (!resp.ok) return setStatus('Could not start a session');
+    const { code } = await resp.json();
+    window.open(`/game/host/${code}`, '_blank', 'noopener');
+    return loadList();
+  }
   const del = btn('del');
   if (del) {
     const g = games.find((x) => x.id === +del);
@@ -359,6 +379,8 @@ $('back').addEventListener('click', () => {
 $('save').addEventListener('click', async () => {
   const bad = editing.rounds.findIndex((r) => !r.question.trim() || !Number.isFinite(r.lat));
   if (bad !== -1) return alert(`Round #${bad + 1} needs a question and a location before saving.`);
+  if ((editing.sessions || []).some((s) => s.state !== 'finished')
+    && !confirm('A live session is running on this game. Saving changes the rounds under it. Continue?')) return;
   $('save').disabled = true;
   setStatus('Saving…');
   try {
@@ -368,7 +390,7 @@ $('save').addEventListener('click', async () => {
     });
     if (!resp.ok) throw new Error(resp.status);
     const d = await resp.json();
-    editing = { game: d.game, rounds: d.rounds, dirty: false };
+    editing = { game: d.game, rounds: d.rounds, sessions: editing.sessions, dirty: false };
     render();
     setStatus('Saved ' + new Date().toLocaleTimeString());
   } catch { setStatus('Save failed — try again'); $('save').disabled = false; }
