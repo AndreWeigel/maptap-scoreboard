@@ -41,6 +41,7 @@ function snapshot(db, session, token) {
 
 module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
   const router = express.Router();
+  const UPLOADS = path.resolve(uploadsDir); // res.sendFile needs an absolute path; production passes a relative one
   // code → Set<{ res, token }>. The only in-memory state; rebuilds itself as clients reconnect.
   const streams = new Map();
   const send = (res, snap) => res.write(`event: state\ndata: ${JSON.stringify(snap)}\n\n`);
@@ -158,7 +159,7 @@ module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
     const { rounds } = db.getGame(s.game_id);
     const shown = new Set(revealedOrds(s, rounds));
     if (!rounds.some((r) => shown.has(r.ord) && r.photo === file)) return res.status(404).end();
-    res.sendFile(path.join(uploadsDir, file), { maxAge: '1h' }, (err) => { if (err) res.status(404).end(); });
+    res.sendFile(path.join(UPLOADS, file), { maxAge: '1h' }, (err) => { if (err) res.status(404).end(); });
   });
 
   return router;

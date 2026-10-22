@@ -13,12 +13,12 @@ const auth = { authorization: 'Basic ' + Buffer.from('admin:s3cret').toString('b
 const json = { 'content-type': 'application/json' };
 const adminJson = { ...auth, ...json };
 
-async function withServer(fn) {
+async function withServer(fn, { relativeUploads = false } = {}) {
   const db = openGameDb(':memory:');
   const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'live-uploads-'));
   const app = express();
   app.use(express.json());
-  app.use('/game', liveRoutes({ basicAuth, db, uploadsDir }));
+  app.use('/game', liveRoutes({ basicAuth, db, uploadsDir: relativeUploads ? path.relative(process.cwd(), uploadsDir) : uploadsDir }));
   const server = app.listen(0);
   const base = `http://127.0.0.1:${server.address().port}`;
   const g = db.createGame('Trains');
@@ -194,6 +194,17 @@ test('events: snapshot on connect, again on every change; headers tell nginx not
     ac.abort();
     assert.equal((await fetch(`${base}/game/live/api/nope/events`)).status, 404);
   });
+});
+
+test('photo route works with a relative uploadsDir (production passes data/uploads)', async () => {
+  await withServer(async ({ base, game }) => {
+    const { code } = await (await post(`${base}/game/api/admin/games/${game.id}/sessions`, undefined, auth)).json();
+    await next(base, code); // open 0
+    await next(base, code); // revealed 0
+    const r = await fetch(`${base}/game/live/api/${code}/photo/a1b2c3d4e5f60718.jpg`);
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), 'notreallyajpeg');
+  }, { relativeUploads: true });
 });
 
 test('photo route serves a round photo only once that round is revealed', async () => {
