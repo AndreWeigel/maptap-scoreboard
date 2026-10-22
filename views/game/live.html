@@ -155,6 +155,7 @@ const map = new maplibregl.Map({
 window.map = map; // console/debug handle
 
 const EMPTY = { type: 'FeatureCollection', features: [] };
+let ready = false; // map.loaded() is false whenever tiles are in flight and 'load' fires once, so track readiness ourselves
 map.on('load', () => {
   map.addSource('truth', { type: 'geojson', data: EMPTY });
   map.addSource('lines', { type: 'geojson', data: EMPTY });
@@ -162,8 +163,9 @@ map.on('load', () => {
     paint: { 'line-color': '#ffffff', 'line-opacity': .7, 'line-width': 1.5, 'line-dasharray': [1.5, 1.5] } });
   map.addLayer({ id: 'truth', type: 'circle', source: 'truth',
     paint: { 'circle-radius': 7, 'circle-color': '#ffd15c', 'circle-stroke-color': '#070b1c', 'circle-stroke-width': 2 } });
+  ready = true;
 });
-const whenLoaded = (fn) => (map.loaded() ? fn() : map.once('load', fn));
+const whenLoaded = (fn) => (ready ? fn() : map.once('load', fn));
 
 let snap = null;           // latest server snapshot
 let shown = { state: null, ord: null }; // what the globe currently reflects, to know when to reset
@@ -212,7 +214,7 @@ function renderOpen() {
   $('action').hidden = HOST || !marker || sent;
 }
 
-function renderReveal() {
+function renderReveal(roundChanged) {
   const { truth, guesses } = snap.reveal;
   setBanner(snap.round.question, '', `${snap.round.ord + 1}/${snap.roundCount}`);
   $('action').hidden = true;
@@ -229,6 +231,7 @@ function renderReveal() {
     map.getSource('truth').setData({ type: 'Feature', geometry: { type: 'Point', coordinates: [truth.lng, truth.lat] } });
     map.getSource('lines').setData({ type: 'FeatureCollection', features: guesses.map((g) => ({
       type: 'Feature', geometry: { type: 'LineString', coordinates: [[g.lng, g.lat], [truth.lng, truth.lat]] } })) });
+    if (!roundChanged) return; // late joiners / rebroadcasts must not yank the camera
     const b = new maplibregl.LngLatBounds([truth.lng, truth.lat], [truth.lng, truth.lat]);
     for (const g of guesses) b.extend([g.lng, g.lat]);
     // wide screens: the result panel sits on the right; phones: it sits across the top
@@ -299,7 +302,7 @@ function render() {
   if (roundChanged && (snap.state === 'open' || snap.state === 'lobby' || snap.state === 'finished')) { clearGlobe(); sent = false; }
   shown = { state: snap.state, ord: snap.round ? snap.round.ord : null };
   $('endov').hidden = snap.state !== 'finished';
-  ({ lobby: renderLobby, open: renderOpen, revealed: renderReveal, finished: renderFinished })[snap.state]();
+  ({ lobby: renderLobby, open: renderOpen, revealed: renderReveal, finished: renderFinished })[snap.state](roundChanged);
   renderHost();
 }
 
