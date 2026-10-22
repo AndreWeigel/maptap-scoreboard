@@ -42,6 +42,7 @@
   #panel h2 { font: .7rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--cyan); margin: 0 0 8px; }
   #panel .ans { font-weight: 700; margin-bottom: 8px; }
   #panel img { width: 100%; border-radius: 10px; border: 1px solid var(--border); display: block; margin: 8px 0 4px; }
+  @media (max-width: 699px) { #panel img { max-height: 110px; object-fit: cover; } }
   #panel .story { font-size: .88rem; white-space: pre-wrap; margin-top: 6px; }
   #panel table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   #panel td { padding: 5px 4px; border-top: 1px solid var(--border); }
@@ -231,7 +232,7 @@ function renderReveal() {
     const b = new maplibregl.LngLatBounds([truth.lng, truth.lat], [truth.lng, truth.lat]);
     for (const g of guesses) b.extend([g.lng, g.lat]);
     // wide screens: the result panel sits on the right; phones: it sits across the top
-    const padding = innerWidth < 700 ? { top: 380, bottom: 60, left: 50, right: 50 } : { top: 110, bottom: 80, left: 60, right: 360 };
+    const padding = innerWidth < 700 ? { top: 460, bottom: 50, left: 50, right: 50 } : { top: 110, bottom: 80, left: 60, right: 360 };
     map.fitBounds(b, { padding, maxZoom: 9, duration: RM ? 0 : 1200 });
   });
 
@@ -307,7 +308,7 @@ function place(lat, lng) {
   if (HOST || !snap || snap.state !== 'open') return;
   if (!marker) {
     marker = new maplibregl.Marker({ draggable: true, color: '#22d3ee' }).setLngLat([lng, lat]).addTo(map);
-    marker.on('dragend', () => { sent = false; renderOpen(); });
+    marker.on('dragend', () => { if (snap && snap.state === 'open') { sent = false; renderOpen(); } });
   } else marker.setLngLat([lng, lat]);
   sent = false;
   renderOpen();
@@ -318,12 +319,12 @@ async function confirmGuess() {
   if (!marker || !snap || snap.state !== 'open') return;
   const { lat, lng } = marker.getLngLat().wrap();
   $('action').hidden = true;
+  const ord = snap.round.ord;
   try {
-    const resp = await postJson('/guess', { token, ord: snap.round.ord, lat, lng });
+    const resp = await postJson('/guess', { token, ord, lat, lng });
     if (resp.status === 409) { $('hint').textContent = 'round closed — waiting for the host'; return; }
     if (!resp.ok) throw new Error(resp.status);
-    sent = true;
-    renderOpen();
+    if (snap && snap.state === 'open' && snap.round && snap.round.ord === ord) { sent = true; renderOpen(); }
   } catch { $('action').hidden = false; $('hint').textContent = 'network hiccup — try confirm again'; }
 }
 $('action').addEventListener('click', confirmGuess);
