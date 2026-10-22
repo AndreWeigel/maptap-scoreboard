@@ -166,3 +166,19 @@ test('GET /game/:slug serves the play page for real slugs only', async () => {
     assert.equal((await fetch(`${base}/game/deadbeefdeadbeef`)).status, 404);
   });
 });
+
+test('live routes are mounted before the /:slug catch-all', async () => {
+  await withServer(async (base) => {
+    const g = await (await fetch(`${base}/game/api/admin/games`, {
+      method: 'POST', headers: json, body: JSON.stringify({ title: 'live' }),
+    })).json();
+    await fetch(`${base}/game/api/admin/games/${g.id}`, { method: 'PUT', headers: json,
+      body: JSON.stringify({ title: 'live', rounds: [{ question: 'q', lat: 1, lng: 2 }] }) });
+    const { code } = await (await fetch(`${base}/game/api/admin/games/${g.id}/sessions`, { method: 'POST', headers: auth })).json();
+    assert.equal((await fetch(`${base}/game/live/${code}`)).status, 200);
+    assert.equal((await fetch(`${base}/game/live/api/${code}`)).status, 200);
+    assert.equal((await fetch(`${base}/game/host/${code}`, { headers: auth })).status, 200);
+    assert.equal((await fetch(`${base}/game/live/nope`)).status, 404);
+    assert.equal((await fetch(`${base}/game/${g.slug}`)).status, 200); // the old play page still resolves
+  });
+});

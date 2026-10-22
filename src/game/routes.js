@@ -4,6 +4,7 @@ const path = require('node:path');
 const express = require('express');
 const { openGameDb } = require('./db');
 const { haversineKm, points } = require('./scoring');
+const liveRoutes = require('./live');
 
 const VIEWS = path.join(__dirname, '..', '..', 'views', 'game');
 // Same pattern the host's upload endpoint generates; duplicated on purpose
@@ -32,7 +33,7 @@ function cleanRound(r) {
   };
 }
 
-module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db' }) {
+module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db', uploadsDir = 'data/uploads' }) {
   const db = openGameDb(dbPath);
   const router = express.Router();
 
@@ -122,6 +123,9 @@ module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db' }) {
     if (!g) return res.status(404).json({ error: 'no such game' });
     res.json({ leaderboard: db.listPlays(g.game.id) });
   });
+
+  // Live sessions (src/game/live.js) — before the /:slug catch-all so /live/… and /host/… resolve.
+  router.use(liveRoutes({ basicAuth, db, uploadsDir }));
 
   // The share link: the play page itself (fetches its data from /game/api/:slug).
   router.get('/:slug', (req, res) => {

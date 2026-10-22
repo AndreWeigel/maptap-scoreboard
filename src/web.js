@@ -112,7 +112,7 @@ function createApp(db, status) {
   });
 
   // ---- Custom games (isolated module: src/game/, data/game.db). ----
-  app.use('/game', require('./game/routes')({ basicAuth }));
+  app.use('/game', require('./game/routes')({ basicAuth, uploadsDir: UPLOADS }));
 
   // The viewed season's theme goes on <html> server-side, so the page never flashes
   // the wrong look while it waits for /api/standings. Picking a past season is a real
