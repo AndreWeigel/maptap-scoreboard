@@ -1,0 +1,126 @@
+// Live sessions: the host-driven, everyone-at-once way to play a custom game.
+// Mounted inside the game router (before its /:slug catch-all). Depends on the
+// host only for basicAuth and the uploads folder.
+const path = require('node:path');
+const express = require('express');
+const { revealedOrds } = require('./db');
+const { haversineKm, points } = require('./scoring');
+
+const VIEWS = path.join(__dirname, '..', '..', 'views', 'game');
+const PHOTO_FILE = /^[a-f0-9]{16}\.(jpg|png|webp|gif)$/; // duplicated on purpose (module stays liftable)
+
+const validCoords = (lat, lng) =>
+  Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lng) && Math.abs(lng) <= 180;
+
+// The one payload every live page renders from. Truth + guesses only once revealed.
+function snapshot(db, session, token) {
+  const { game, rounds } = db.getGame(session.game_id);
+  const inRound = session.state === 'open' || session.state === 'revealed';
+  const round = inRound ? rounds.find((r) => r.ord === session.current_ord) || null : null;
+  const guesses = round ? db.listGuesses(session.id, round.ord) : [];
+  const answered = new Set(guesses.map((g) => g.player_id));
+  const players = db.listPlayers(session.id).map((p) => ({ id: p.id, name: p.name, answered: answered.has(p.id) }));
+  let reveal = null;
+  if (session.state === 'revealed' && round) {
+    const { lat, lng, city, country, photo, story, answer } = round;
+    reveal = {
+      truth: { lat, lng, city, country, photo, story, answer },
+      guesses: guesses.map((g) => ({ playerId: g.player_id, name: g.name, lat: g.lat, lng: g.lng, km: g.km, points: g.points })),
+    };
+  }
+  const standings = db.standings(session.id, revealedOrds(session, rounds))
+    .map((s) => ({ playerId: s.player_id, name: s.name, total: s.total }));
+  const me = token ? db.playerByToken(token) : null;
+  const you = me && me.session_id === session.id ? { playerId: me.id, name: me.name } : null;
+  return {
+    code: session.code, title: game.title, state: session.state, roundCount: rounds.length,
+    round: round ? { ord: round.ord, question: round.question } : null,
+    players, reveal, standings, you,
+  };
+}
+
+module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
+  const router = express.Router();
+  const broadcast = (_code) => {}; // Task 3 replaces this with the SSE fan-out
+
+  const load = (req, res) => {
+    const s = db.getSession(req.params.code);
+    if (!s) res.status(404).json({ error: 'no such session' });
+    return s;
+  };
+  const tokenOf = (req) => (typeof req.query.token === 'string' ? req.query.token : null);
+
+  // ---- Admin: create / list / drive ----
+  router.post('/api/admin/games/:id/sessions', basicAuth, (req, res) => {
+    const g = db.getGame(+req.params.id);
+    if (!g) return res.status(404).json({ error: 'no such game' });
+    if (!g.rounds.length) return res.status(400).json({ error: 'game has no rounds' });
+    res.json({ code: db.createSession(g.game.id).code });
+  });
+  router.get('/api/admin/games/:id/sessions', basicAuth, (req, res) => {
+    if (!db.getGame(+req.params.id)) return res.status(404).json({ error: 'no such game' });
+    res.json({ sessions: db.listSessions(+req.params.id) });
+  });
+  router.post('/api/admin/sessions/:code/next', basicAuth, (req, res) => {
+    let s;
+    try { s = db.advanceSession(req.params.code); }
+    catch (e) { if (e instanceof RangeError) return res.status(400).json({ error: 'session finished' }); throw e; }
+    if (!s) return res.status(404).json({ error: 'no such session' });
+    broadcast(s.code);
+    res.json(snapshot(db, s, null));
+  });
+  router.post('/api/admin/sessions/:code/end', basicAuth, (req, res) => {
+    const s = db.endSession(req.params.code);
+    if (!s) return res.status(404).json({ error: 'no such session' });
+    broadcast(s.code);
+    res.json(snapshot(db, s, null));
+  });
+  router.get('/host/:code', basicAuth, (req, res) => {
+    if (!db.getSession(req.params.code)) return res.status(404).send('No such session.');
+    res.sendFile(path.join(VIEWS, 'live.html'));
+  });
+
+  // ---- Public: the code is the access control ----
+  router.get('/live/:code', (req, res) => {
+    if (!db.getSession(req.params.code)) return res.status(404).send('No such session.');
+    res.sendFile(path.join(VIEWS, 'live.html'));
+  });
+  router.get('/live/api/:code', (req, res) => {
+    const s = load(req, res); if (!s) return;
+    const { game, rounds } = db.getGame(s.game_id);
+    res.json({ title: game.title, roundCount: rounds.length, state: s.state });
+  });
+  router.post('/live/api/:code/join', (req, res) => {
+    const s = load(req, res); if (!s) return;
+    const name = typeof (req.body || {}).name === 'string' ? req.body.name.trim().slice(0, 40) : '';
+    if (!name) return res.status(400).json({ error: 'name required' });
+    let p;
+    try { p = db.joinSession(s.id, name); }
+    catch (e) {
+      if (String(e.code).startsWith('SQLITE_CONSTRAINT')) return res.status(409).json({ error: 'name taken' });
+      throw e;
+    }
+    broadcast(s.code);
+    res.json({ token: p.token, playerId: p.id, name: p.name });
+  });
+  router.post('/live/api/:code/guess', (req, res) => {
+    const s = load(req, res); if (!s) return;
+    const b = req.body || {};
+    const me = typeof b.token === 'string' ? db.playerByToken(b.token) : null;
+    if (!me || me.session_id !== s.id) return res.status(401).json({ error: 'bad token' });
+    if (s.state !== 'open' || b.ord !== s.current_ord) return res.status(409).json({ error: 'round not open' });
+    if (!validCoords(b.lat, b.lng)) return res.status(400).json({ error: 'bad coords' });
+    const round = db.getGame(s.game_id).rounds.find((r) => r.ord === s.current_ord);
+    const km = Math.round(haversineKm(b.lat, b.lng, round.lat, round.lng) * 10) / 10;
+    db.upsertGuess(s.id, me.id, round.ord, { lat: b.lat, lng: b.lng, km, points: points(km, round.radius ?? undefined) });
+    broadcast(s.code);
+    res.json({ ok: true }); // nothing about the truth leaves the server before reveal
+  });
+  router.get('/live/api/:code/state', (req, res) => {
+    const s = load(req, res); if (!s) return;
+    res.json(snapshot(db, s, tokenOf(req)));
+  });
+
+  return router;
+};
+module.exports.snapshot = snapshot;
