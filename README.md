@@ -121,7 +121,7 @@ Paste GeoJSON into the round's "Shape" box in the builder (draw one at
 geojson.io, export from OpenStreetMap at overpass-turbo.eu, simplify big files
 at mapshaper.org; max 5,000 points). Scoring is distance to the nearest part of
 the shape — zero inside an area — with the radius as the full-points margin.
-Known limitation: areas that cross the 180° meridian.
+Shapes that cross the 180° meridian are rejected on paste (not supported).
 
 The scoreboard and `/api/standings` stay public. Keep the site behind your own
 TLS/proxy; Basic Auth assumes HTTPS.

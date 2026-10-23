@@ -14,7 +14,7 @@ Decisions made with André on 2026-10-22, in brainstorming. Don't re-litigate:
 | Scoring | One rule for every shape: distance to the nearest part of the shape; zero on or inside it. The existing `radius` is the full-points margin (a corridor for a line, a grace margin outside an area). `points()` unchanged. |
 | Getting shapes in | **Paste GeoJSON** into the builder, with a preview. No in-page drawing in this version; the builder links to geojson.io for drawing, overpass-turbo for OpenStreetMap exports, mapshaper for simplifying. |
 | Geometry code | Hand-written, dependency-free, in the game module (`src/game/geo.js`). No Turf. |
-| Known limitation | Areas crossing the 180° meridian don't test "inside" correctly. Documented, not handled. |
+| Known limitation | Shapes crossing the 180° meridian are rejected on paste (not supported). |
 | Out of scope | In-builder drawing, server-side simplification, GeometryCollection, shapes on the self-paced leaderboard. |
 
 ## Data (`data/game.db`)
