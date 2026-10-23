@@ -168,3 +168,39 @@ test('revealedOrds follows the state', () => {
   assert.deepEqual(revealedOrds({ state: 'open', current_ord: 2 }, rounds), [0, 1]);
   assert.deepEqual(revealedOrds({ state: 'finished', current_ord: 2 }, rounds), [0, 1, 2]);
 });
+
+test('rounds keep geometry as JSON text and return it parsed; null for point rounds', () => {
+  const db = openGameDb(':memory:');
+  const g = db.createGame('shapes');
+  const line = { type: 'LineString', coordinates: [[0, 0], [10, 0]] };
+  db.saveGame(g.id, 'shapes', [round('Line?', 0, 5, { geometry: line }), round('Point?', 1, 2)]);
+  const { rounds } = db.getGame(g.id);
+  assert.deepEqual(rounds[0].geometry, line);
+  assert.equal(rounds[1].geometry, null);
+  assert.equal(db.raw.prepare('SELECT typeof(geometry) t FROM rounds WHERE ord = 0').get().t, 'text');
+});
+
+test('openGameDb adds the geometry column to a pre-shape db file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gamedb-'));
+  const file = path.join(dir, 'game.db');
+  try {
+    const Database = require('better-sqlite3');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE games (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE TABLE rounds (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+        ord INTEGER NOT NULL, question TEXT NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL,
+        city TEXT, country TEXT, photo TEXT, story TEXT, answer TEXT, radius REAL, UNIQUE(game_id, ord));
+      INSERT INTO games (slug, title, created_at) VALUES ('aaaabbbbccccdddd', 'old', 'now');
+      INSERT INTO rounds (game_id, ord, question, lat, lng) VALUES (1, 0, 'q', 1, 2);
+    `);
+    old.close();
+    const db = openGameDb(file);
+    assert.equal(db.getGame(1).rounds[0].geometry, null);
+    db.saveGame(1, 'old', [round('q', 1, 2, { geometry: { type: 'Point', coordinates: [2, 1] } })]);
+    assert.deepEqual(db.getGame(1).rounds[0].geometry, { type: 'Point', coordinates: [2, 1] });
+    db.raw.close();
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

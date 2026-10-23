@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   lat      REAL NOT NULL,
   lng      REAL NOT NULL,
   city     TEXT, country TEXT, photo TEXT, story TEXT,
-  answer   TEXT, radius REAL,
+  answer   TEXT, radius REAL, geometry TEXT,
   UNIQUE(game_id, ord)
 );
 CREATE TABLE IF NOT EXISTS plays (
@@ -86,10 +86,11 @@ function openGameDb(dbPath) {
   const cols = db.prepare('PRAGMA table_info(rounds)').all().map((c) => c.name);
   if (!cols.includes('answer')) db.exec('ALTER TABLE rounds ADD COLUMN answer TEXT');
   if (!cols.includes('radius')) db.exec('ALTER TABLE rounds ADD COLUMN radius REAL');
+  if (!cols.includes('geometry')) db.exec('ALTER TABLE rounds ADD COLUMN geometry TEXT');
 
   const insertRound = db.prepare(`
-    INSERT INTO rounds (game_id, ord, question, lat, lng, city, country, photo, story, answer, radius)
-    VALUES (@game_id, @ord, @question, @lat, @lng, @city, @country, @photo, @story, @answer, @radius)
+    INSERT INTO rounds (game_id, ord, question, lat, lng, city, country, photo, story, answer, radius, geometry)
+    VALUES (@game_id, @ord, @question, @lat, @lng, @city, @country, @photo, @story, @answer, @radius, @geometry)
   `);
   const insertGuess = db.prepare(`
     INSERT INTO guesses (play_id, round_ord, lat, lng, km, points)
@@ -109,6 +110,7 @@ function openGameDb(dbPath) {
       game_id: id, ord, question: r.question, lat: r.lat, lng: r.lng,
       city: r.city ?? null, country: r.country ?? null, photo: r.photo ?? null, story: r.story ?? null,
       answer: r.answer ?? null, radius: r.radius ?? null,
+      geometry: r.geometry ? JSON.stringify(r.geometry) : null,
     }));
   });
 
@@ -164,7 +166,8 @@ function openGameDb(dbPath) {
     getGame(id) {
       const game = db.prepare('SELECT * FROM games WHERE id = ?').get(id);
       if (!game) return null;
-      const rounds = db.prepare('SELECT * FROM rounds WHERE game_id = ? ORDER BY ord').all(id);
+      const rounds = db.prepare('SELECT * FROM rounds WHERE game_id = ? ORDER BY ord').all(id)
+        .map((r) => ({ ...r, geometry: r.geometry ? JSON.parse(r.geometry) : null }));
       return { game, rounds };
     },
 

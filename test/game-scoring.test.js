@@ -16,3 +16,16 @@ test('points: full inside radius, exp decay after, radius tunes the zone', () =>
   assert.equal(points(19, 20), 100);
   assert.ok(points(200) > points(300), 'monotonic decay');
 });
+
+const { distanceToRound } = require('../src/game/scoring');
+
+test('distanceToRound: point round → haversine to the point; shape round → nearest on the shape', () => {
+  const pt = distanceToRound(1, 0, { lat: 0, lng: 0, geometry: null });
+  assert.equal(pt.km, 111.2);
+  assert.deepEqual(pt.nearest, { lat: 0, lng: 0 });
+  const line = distanceToRound(1, 5, { lat: 0, lng: 5, geometry: { type: 'LineString', coordinates: [[0, 0], [10, 0]] } });
+  assert.equal(line.km, 111.2);
+  assert.deepEqual(line.nearest, { lat: 0, lng: 5 });
+  const inside = distanceToRound(5, 5, { lat: 5, lng: 5, geometry: { type: 'Polygon', coordinates: [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]] } });
+  assert.deepEqual(inside, { km: 0, nearest: { lat: 5, lng: 5 } });
+});
