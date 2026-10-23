@@ -222,3 +222,21 @@ test('photo route serves a round photo only once that round is revealed', async 
     assert.equal((await fetch(`${base}/game/live/api/${code}/photo/..%2Fsecret.jpg`)).status, 404);
   });
 });
+
+test('shape round: live guesses score by nearest point; reveal carries geometry and each nearest', async () => {
+  await withServer(async ({ base, db }) => {
+    const LINE = { type: 'LineString', coordinates: [[0, 0], [10, 0]] };
+    const g = db.createGame('Shapes');
+    db.saveGame(g.id, 'Shapes', [{ question: 'Equator?', lat: 0, lng: 5, geometry: LINE, radius: 10 }]);
+    const { code } = await (await post(`${base}/game/api/admin/games/${g.id}/sessions`, undefined, auth)).json();
+    const fer = await (await post(`${base}/game/live/api/${code}/join`, { name: 'Fer' })).json();
+    const ana = await (await post(`${base}/game/live/api/${code}/join`, { name: 'Ana' })).json();
+    await next(base, code); // open
+    await post(`${base}/game/live/api/${code}/guess`, { token: fer.token, ord: 0, lat: 0, lng: 7 });
+    await post(`${base}/game/live/api/${code}/guess`, { token: ana.token, ord: 0, lat: 1, lng: 5 });
+    const snap = await (await next(base, code)).json(); // revealed
+    assert.deepEqual(snap.reveal.truth.geometry, LINE);
+    assert.deepEqual(snap.reveal.guesses.map((x) => [x.name, x.km, x.points, x.nearest]),
+      [['Fer', 0, 100, { lat: 0, lng: 7 }], ['Ana', 111.2, 82, { lat: 0, lng: 5 }]]);
+  });
+});

@@ -4,7 +4,7 @@
 const path = require('node:path');
 const express = require('express');
 const { revealedOrds } = require('./db');
-const { haversineKm, points } = require('./scoring');
+const { points, distanceToRound } = require('./scoring');
 
 const VIEWS = path.join(__dirname, '..', '..', 'views', 'game');
 const PHOTO_FILE = /^[a-f0-9]{16}\.(jpg|png|webp|gif)$/; // duplicated on purpose (module stays liftable)
@@ -22,10 +22,13 @@ function snapshot(db, session, token) {
   const players = db.listPlayers(session.id).map((p) => ({ id: p.id, name: p.name, answered: answered.has(p.id) }));
   let reveal = null;
   if (session.state === 'revealed' && round) {
-    const { lat, lng, city, country, photo, story, answer } = round;
+    const { lat, lng, city, country, photo, story, answer, geometry } = round;
     reveal = {
-      truth: { lat, lng, city, country, photo, story, answer },
-      guesses: guesses.map((g) => ({ playerId: g.player_id, name: g.name, lat: g.lat, lng: g.lng, km: g.km, points: g.points })),
+      truth: { lat, lng, city, country, photo, story, answer, geometry: geometry || null },
+      guesses: guesses.map((g) => ({
+        playerId: g.player_id, name: g.name, lat: g.lat, lng: g.lng, km: g.km, points: g.points,
+        nearest: distanceToRound(g.lat, g.lng, round).nearest, // computed at reveal time, not stored
+      })),
     };
   }
   const standings = db.standings(session.id, revealedOrds(session, rounds))
@@ -123,7 +126,7 @@ module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
     if (s.state !== 'open' || b.ord !== s.current_ord) return res.status(409).json({ error: 'round not open' });
     if (!validCoords(b.lat, b.lng)) return res.status(400).json({ error: 'bad coords' });
     const round = db.getGame(s.game_id).rounds.find((r) => r.ord === s.current_ord);
-    const km = Math.round(haversineKm(b.lat, b.lng, round.lat, round.lng) * 10) / 10;
+    const { km } = distanceToRound(b.lat, b.lng, round);
     db.upsertGuess(s.id, me.id, round.ord, { lat: b.lat, lng: b.lng, km, points: points(km, round.radius ?? undefined) });
     broadcast(s.code);
     res.json({ ok: true }); // nothing about the truth leaves the server before reveal
