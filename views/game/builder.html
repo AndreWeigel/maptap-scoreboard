@@ -130,8 +130,9 @@ function parseShape(text) {
   if (new Set(geoms.map((g) => KINDS[g.type])).size > 1) return { error: 'paste one kind of shape (all lines, or all areas)' };
   const geometry = geoms.length === 1 ? geoms[0] : v; // the server merges a FeatureCollection; send it as pasted
   let n = 0, minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-  const walk = (c) => { if (typeof c[0] === 'number') { n++; minLng = Math.min(minLng, c[0]); maxLng = Math.max(maxLng, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]); } else c.forEach(walk); };
+  const walk = (c) => { if (typeof c[0] === 'number') { n++; minLng = Math.min(minLng, c[0]); maxLng = Math.max(maxLng, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]); } else if (Array.isArray(c)) c.forEach(walk); };
   for (const g of geoms) walk(g.coordinates);
+  if (!n || ![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) return { error: 'invalid shape' };
   const label = `${geoms.length === 1 ? geoms[0].type : geoms.length + ' features'} · ${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
   return { geometry, label, lat: +((minLat + maxLat) / 2).toFixed(5), lng: +((minLng + maxLng) / 2).toFixed(5) };
 }
@@ -378,7 +379,7 @@ main.addEventListener('change', async (e) => {
     if (!text) { delete r.geometry; delete r.shapeText; delete r.shapeLabel; editing.dirty = true; return render(); }
     const p = parseShape(text);
     r.shapeText = text;
-    if (p.error) { r.shapeErr = p.error; return render(); }
+    if (p.error) { r.shapeErr = p.error; delete r.geometry; delete r.shapeLabel; editing.dirty = true; return render(); }
     r.geometry = p.geometry; r.shapeLabel = p.label;
     r.lat = p.lat; r.lng = p.lng; delete r.city; delete r.country;
     editing.dirty = true; return render();
