@@ -1,33 +1,25 @@
-# Handover: the globe stack (people album + custom games)
+# Handover: the globe stack (people album)
 
-2026-09-07. Written after slices 1–3 shipped. This is the "what we actually
-use and why" reference for anything that renders a globe. The older
-`HANDOVER-globe-game.md` is the pre-implementation decision record — read it
-for *why*, read this for *what's there*.
+Custom games moved to the `quiz` repo on 2026-10-23 — see its `docs/HANDOVER-globe.md`.
+
+2026-09-07. This is the "what we actually use and why" reference for anything
+that renders a globe.
 
 ## One line
 
 **MapLibre GL 6.6.0, loaded from jsdelivr as ESM, no build step, not an npm
 dependency** — with `projection: { type: 'globe' }`, Esri World Imagery raster
-tiles, and a hand-written sky/atmosphere block. Three pages use it, each
-differently.
+tiles, and a hand-written sky/atmosphere block.
 
 ## Where the globe appears
 
 | Page | File | Route | Projection | MapLibre load |
 |---|---|---|---|---|
 | People album | `views/globe.html` | `GET /globe` (friends password, [web.js:231](src/web.js#L231)) | globe | static namespace import |
-| Play a game | `views/game/play.html` | `GET /game/:slug` ([routes.js](src/game/routes.js)) | globe | static namespace import |
-| Builder location picker | `views/game/builder.html` | `GET /game/admin` (Basic Auth) | **flat** (mercator) | lazy `await import()` on first open |
-| Live session (player + host) | `views/game/live.html` | `GET /game/live/:code`, `GET /game/host/:code` ([live.js](src/game/live.js)) | globe | static namespace import |
-
-The builder's picker is deliberately flat — picking a point is easier on a
-mercator map than on a sphere — and lazy-loaded, so only game builders pay the
-~1 MB.
 
 ## The shared recipe
 
-Copy this if you ever add a fourth globe. Both globe pages use it verbatim.
+Copy this if you ever add another globe.
 
 ```js
 import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs';
@@ -54,21 +46,11 @@ CSS comes from the same CDN path
 (`.../maplibre-gl@6.6.0/dist/maplibre-gl.css`). Tiles need no API key; keep
 the "Imagery © Esri & contributors" credit visible.
 
-Reveal overlays (both play pages): one `truth` geojson source with three
-layers — `truth-fill` (areas), `truth-line` (lines and outlines), `truth`
-(points) — filtered on `['geometry-type']`, so a point round still renders as
-the gold dot. Geometry math is server-side in `src/game/geo.js`; the pages
-only draw what `/guess` or the live snapshot hands them (`truth.geometry`,
-`nearest`).
+## Geocoding: Nominatim, no key
 
-## Geocoding: Nominatim, no key, two calls
-
-- **Search** — `views/users.html:243` and `views/game/builder.html:317`:
+- **Search** — `views/users.html:243`:
   `search?format=jsonv2&addressdetails=1&accept-language=en&limit=5&q=…`,
   user picks from a top-5 list, structured `city/country/lat/lng` stored.
-- **Reverse** — `views/game/builder.html:220`, after a map click:
-  `reverse?format=jsonv2&accept-language=en&zoom=10&lat=…&lon=…`. Best-effort
-  label only; the coords are already set by the click.
 - City field is always
   `a.city || a.town || a.village || a.hamlet || a.municipality || a.county || h.name`.
 - Rate-limited and keyless — every call is wrapped in `try {} catch {}` and
@@ -78,8 +60,8 @@ only draw what `/guess` or the live snapshot hands them (`truth.geometry`,
 
 Data: `GET /api/globe` ([web.js:238](src/web.js#L238)), behind the same friends password →
 `{ layers: [{ id, label, points: [{ label, city, country, lat, lng, story, photos }] }] }`.
-The `layers` array is deliberately extensible (game locations could become a
-second layer one day) — **don't break the shape**. Points come from
+The `layers` array is deliberately extensible (more layers could be added one
+day) — **don't break the shape**. Points come from
 `data/users.json` via `src/users.js`, filtered to `active` users with a finite
 `lat`.
 
@@ -106,60 +88,11 @@ The interesting parts, all in [globe.html](views/globe.html):
 - **Story panel** is built with `createElement`/`textContent` only — the text
   is user-entered. Never `innerHTML` there.
 
-## `/game/:slug` — the play page
+## Photos
 
-[play.html](views/game/play.html). Slug is read from the URL path; every call
-goes to `/game/api/:slug…`.
-
-- Two GeoJSON sources added on `load` and seeded with an empty
-  FeatureCollection: `truth` (gold circle) and `line` (dashed cyan line).
-  Round transitions just `setData(EMPTY)`.
-- The guess is a **draggable `maplibregl.Marker`**; `map.on('click')` places or
-  moves it. Longitudes always go through `.wrap()` before leaving the page.
-- **Phase machine**: `load | name | guess | reveal | done`, one `#action`
-  button whose label and handler follow the phase.
-- Confirm → `POST /guess` → server answers `{ km, points, truth }` → draw the
-  truth dot + line, then `fitBounds([guess, truth], { padding: 90, maxZoom: 9 })`
-  (duration 0 under reduced motion).
-- Player name lives in `localStorage['maptap:player']`.
-- Finish → `POST /plays` with every guess; **the server recomputes every
-  point** — client totals are never trusted. A repeat name gets `409` plus the
-  leaderboard.
-- `window.playState = { place, confirm, next }` — the debug/driver handle used
-  by the screenshot harness.
-
-## Server side
-
-Everything the game needs lives in `src/game/` + `views/game/` and is mounted
-with **one line** ([web.js:107](src/web.js#L107)):
-
-```js
-app.use('/game', require('./game/routes')({ basicAuth }));
-```
-
-- **Own SQLite file**, `data/game.db` ([db.js](src/game/db.js)) — never
-  `scores.db`. Schema: `games / rounds / plays / guesses`, WAL, foreign keys
-  on, with in-place `ALTER TABLE` migrations for the `answer` and `radius`
-  columns added on 2026-09-01.
-- **Slug = 16 random hex chars, and it *is* the access control** for playing:
-  anyone with the link can play. Round photos come from `/uploads`, which sits
-  behind the friends password (see Photos below), so a shared link needs that
-  password too for the pictures.
-- **Scoring** ([scoring.js:13](src/game/scoring.js#L13)):
-  `points(km, radius = 25)` → 100 inside the round's tolerance radius, then
-  `round(100 * exp(-(km - radius) / 500))`. Haversine on a 6371 km sphere.
-  Tested in `test/game-scoring.test.js`.
-- **Photos**: `POST /api/upload` (Basic Auth, raw `image/*`, 8 MB cap) writes a
-  random 16-hex filename; `/uploads` is static with `maxAge: 365d, immutable`,
-  behind `friendsAuth` (`FRIENDS_TOKEN` or the admin password; unset = admin-only).
-  The `PHOTO_FILE` regex is duplicated in `src/game/routes.js` and
-  `src/users.js` **on purpose** — the game module imports nothing from the host
-  so it can be lifted out later.
-- Replay block is a `UNIQUE(game_id, player_name COLLATE NOCASE)` constraint,
-  caught as `SQLITE_CONSTRAINT` → 409.
-
-Known and accepted: `POST /guess` reveals a round's truth without requiring a
-real guess. Honor system, by design.
+`POST /api/upload` (Basic Auth, raw `image/*`, 8 MB cap) writes a random
+16-hex filename; `/uploads` is static with `maxAge: 365d, immutable`, behind
+`friendsAuth` (`FRIENDS_TOKEN` or the admin password; unset = admin-only).
 
 ## Gotchas — do not rediscover these
 
@@ -188,9 +121,8 @@ real guess. Honor system, by design.
 
 ## State of play
 
-Slices 1–3 are shipped: people stories on `/globe`, the game builder, the play
-page + scoring + leaderboard, plus two UI/accessibility polish passes
-(`8d28518`, `f4f9a6d`). Specs and plans are in `docs/superpowers/`.
+The people album on `/globe` is shipped, plus two UI/accessibility polish
+passes (`8d28518`, `f4f9a6d`). Specs and plans are in `docs/superpowers/`.
 
 Deploy: pushing to `main` runs `.github/workflows/deploy.yml`, which SSHes in and
 runs `cd /root/maptap-scoreboard && git pull --ff-only && docker compose up -d --build`.

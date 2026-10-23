@@ -99,29 +99,9 @@ works, and with `FRIENDS_TOKEN` unset it's the only one that does):
 
 - `GET /globe` and `GET /api/globe` — the globe page and its points: real names,
   birth cities, exact coordinates, stories, photo filenames
-- `GET /uploads/*` — every uploaded photo, including the ones on `/game/:slug`
-  pages, so a shared game link now needs the password too
+- `GET /uploads/*` — every uploaded photo
 
-Live sessions (everyone plays a custom game at once, host reveals; no login, the
-code in the link is the access control):
-
-- `GET /game/live/:code` — player page; `GET /game/host/:code` — host page (admin password)
-- `GET /game/live/api/:code` — title, round count, state; `POST …/join` `{ name }` → `{ token }`
-- `POST /game/live/api/:code/guess` `{ token, ord, lat, lng }` — accepted only while that round is open
-- `GET /game/live/api/:code/state?token=` — one snapshot; `GET …/events?token=` — the same as a Server-Sent Events stream
-- `GET /game/live/api/:code/photo/:file` — a round's photo, only once that round is revealed
-- Admin: `POST`/`GET /game/api/admin/games/:id/sessions`, `POST /game/api/admin/sessions/:code/next`, `POST …/end`
-
-Start one from "Go live" on `/game/admin`; the host page has the join link.
-Behind nginx the stream relies on the `X-Accel-Buffering: no` header the app
-sends, so no proxy config is needed.
-
-Shape rounds: a round's answer can be a line or an area instead of a point.
-Paste GeoJSON into the round's "Shape" box in the builder (draw one at
-geojson.io, export from OpenStreetMap at overpass-turbo.eu, simplify big files
-at mapshaper.org; max 5,000 points). Scoring is distance to the nearest part of
-the shape — zero inside an area — with the radius as the full-points margin.
-Shapes that cross the 180° meridian are rejected on paste (not supported).
+Custom quizzes moved to [quiz.andreweigel.me](https://quiz.andreweigel.me) ([repo](https://github.com/AndreWeigel/quiz)); `/game/*` redirects there.
 
 The scoreboard and `/api/standings` stay public. Keep the site behind your own
 TLS/proxy; Basic Auth assumes HTTPS.

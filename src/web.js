@@ -111,8 +111,9 @@ function createApp(db, status) {
     res.json({ file });
   });
 
-  // ---- Custom games (isolated module: src/game/, data/game.db). ----
-  app.use('/game', require('./game/routes')({ basicAuth, uploadsDir: UPLOADS }));
+  // Custom games moved to quiz.andreweigel.me (2026-10-23); keep old share links alive.
+  app.get(['/game', '/game/*'], (req, res) =>
+    res.redirect(301, 'https://quiz.andreweigel.me' + req.originalUrl.replace(/^\/game/, '')));
 
   // The viewed season's theme goes on <html> server-side, so the page never flashes
   // the wrong look while it waits for /api/standings. Picking a past season is a real

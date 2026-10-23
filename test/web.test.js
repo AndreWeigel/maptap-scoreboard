@@ -120,7 +120,7 @@ test('upload: auth required, images only, random name, served back', async () =>
       const got = await fetch(`${base}/uploads/${file}`, { headers: { authorization: authHeader('friends') } });
       assert.strictEqual(got.status, 200);
       assert.deepEqual(Buffer.from(await got.arrayBuffer()), png);
-      // The admin password opens the friends door too (so /users and the game builder still preview).
+      // The admin password opens the friends door too (so /users still previews).
       assert.strictEqual((await fetch(`${base}/uploads/${file}`,
         { headers: { authorization: authHeader('s3cret') } })).status, 200);
     } finally { fs.rmSync(`data/uploads/${file}`, { force: true }); }
@@ -210,4 +210,16 @@ test('feedback: stores valid posts, rejects junk, and stays admin-only to read',
     assert.strictEqual(ok.status, 200);
     assert.match(await ok.text(), /the globe is upside down/);
   }, db);
+});
+
+test('/game/* redirects to the quiz domain with the prefix stripped', async () => {
+  await withServer(async (base) => {
+    const r = await fetch(`${base}/game/abc`, { redirect: 'manual' });
+    assert.strictEqual(r.status, 301);
+    assert.strictEqual(r.headers.get('location'), 'https://quiz.andreweigel.me/abc');
+    const l = await fetch(`${base}/game/live/xyz?x=1`, { redirect: 'manual' });
+    assert.strictEqual(l.headers.get('location'), 'https://quiz.andreweigel.me/live/xyz?x=1');
+    const root = await fetch(`${base}/game`, { redirect: 'manual' });
+    assert.strictEqual(root.headers.get('location'), 'https://quiz.andreweigel.me');
+  });
 });
