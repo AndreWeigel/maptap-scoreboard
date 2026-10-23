@@ -116,6 +116,13 @@ Start one from "Go live" on `/game/admin`; the host page has the join link.
 Behind nginx the stream relies on the `X-Accel-Buffering: no` header the app
 sends, so no proxy config is needed.
 
+Shape rounds: a round's answer can be a line or an area instead of a point.
+Paste GeoJSON into the round's "Shape" box in the builder (draw one at
+geojson.io, export from OpenStreetMap at overpass-turbo.eu, simplify big files
+at mapshaper.org; max 5,000 points). Scoring is distance to the nearest part of
+the shape — zero inside an area — with the radius as the full-points margin.
+Known limitation: areas that cross the 180° meridian.
+
 The scoreboard and `/api/standings` stay public. Keep the site behind your own
 TLS/proxy; Basic Auth assumes HTTPS.
 

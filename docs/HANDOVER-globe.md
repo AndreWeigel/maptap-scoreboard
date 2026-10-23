@@ -54,6 +54,13 @@ CSS comes from the same CDN path
 (`.../maplibre-gl@6.6.0/dist/maplibre-gl.css`). Tiles need no API key; keep
 the "Imagery © Esri & contributors" credit visible.
 
+Reveal overlays (both play pages): one `truth` geojson source with three
+layers — `truth-fill` (areas), `truth-line` (lines and outlines), `truth`
+(points) — filtered on `['geometry-type']`, so a point round still renders as
+the gold dot. Geometry math is server-side in `src/game/geo.js`; the pages
+only draw what `/guess` or the live snapshot hands them (`truth.geometry`,
+`nearest`).
+
 ## Geocoding: Nominatim, no key, two calls
 
 - **Search** — `views/users.html:243` and `views/game/builder.html:317`:
