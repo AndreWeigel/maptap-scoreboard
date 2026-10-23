@@ -7,6 +7,7 @@ const MAX_BYTES = 1000000;
 const ERR_BIG = 'shape too big — simplify it at mapshaper.org (max 5,000 points)';
 const ERR_MIXED = 'paste one kind of shape (all lines, or all areas)';
 const ERR_INVALID = 'invalid shape';
+const ERR_ANTIMERIDIAN = 'shapes that cross the 180° meridian are not supported';
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
@@ -43,7 +44,7 @@ function nearestOnSegment(p, a, b) {
   return angle(P, A) <= angle(P, B) ? a : b; // degenerate or outside the arc: nearer endpoint
 }
 
-// Even-odd ray casting on lng/lat. Known limitation: rings crossing the 180° meridian.
+// Even-odd ray casting on lng/lat. Rings crossing the 180° meridian are rejected in normalizeGeometry.
 function inRing(lat, lng, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -126,7 +127,7 @@ const cleanPoly = (rings) => {
 
 // Flatten one geometry into { kind, parts } where parts are positions / lines / polygons.
 function flatten(g) {
-  if (!g || typeof g !== 'object' || !KIND[g.type]) return null;
+  if (!g || typeof g !== 'object' || typeof g.type !== 'string' || !Object.hasOwn(KIND, g.type)) return null;
   const kind = KIND[g.type], c = g.coordinates;
   let parts;
   if (g.type === 'Point') parts = [cleanPos(c)];
@@ -154,6 +155,9 @@ function normalizeGeometry(input) {
   if (!flat.length || flat.includes(null)) return { error: ERR_INVALID };
   if (new Set(flat.map((f) => f.kind)).size > 1) return { error: ERR_MIXED };
   const kind = flat[0].kind, parts = flat.flatMap((f) => f.parts);
+  // Lines and rings are one array of positions; a jump of more than 180° of longitude means the 180° meridian.
+  const seqs = kind === 'line' ? parts : kind === 'area' ? parts.flat() : [];
+  if (seqs.some((s) => s.some((p, i) => i > 0 && Math.abs(p[0] - s[i - 1][0]) > 180))) return { error: ERR_ANTIMERIDIAN };
   const vertices = kind === 'point' ? parts.length : kind === 'line' ? parts.reduce((s, l) => s + l.length, 0)
     : parts.reduce((s, p) => s + p.reduce((t, r) => t + r.length, 0), 0);
   if (vertices > MAX_VERTICES) return { error: ERR_BIG };

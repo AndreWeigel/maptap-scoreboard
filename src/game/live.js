@@ -13,7 +13,7 @@ const validCoords = (lat, lng) =>
   Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lng) && Math.abs(lng) <= 180;
 
 // The one payload every live page renders from. Truth + guesses only once revealed.
-function snapshot(db, session, token) {
+function baseSnapshot(db, session) {
   const { game, rounds } = db.getGame(session.game_id);
   const inRound = session.state === 'open' || session.state === 'revealed';
   const round = inRound ? rounds.find((r) => r.ord === session.current_ord) || null : null;
@@ -33,14 +33,21 @@ function snapshot(db, session, token) {
   }
   const standings = db.standings(session.id, revealedOrds(session, rounds))
     .map((s) => ({ playerId: s.player_id, name: s.name, total: s.total }));
-  const me = token ? db.playerByToken(token) : null;
-  const you = me && me.session_id === session.id ? { playerId: me.id, name: me.name } : null;
   return {
     code: session.code, title: game.title, state: session.state, roundCount: rounds.length,
     round: round ? { ord: round.ord, question: round.question } : null,
-    players, reveal, standings, you,
+    players, reveal, standings, you: null,
   };
 }
+
+// Stamp the per-connection `you` onto a token-independent base snapshot.
+function withYou(db, session, base, token) {
+  const me = token ? db.playerByToken(token) : null;
+  const you = me && me.session_id === session.id ? { playerId: me.id, name: me.name } : null;
+  return { ...base, you };
+}
+
+const snapshot = (db, session, token) => withYou(db, session, baseSnapshot(db, session), token);
 
 module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
   const router = express.Router();
@@ -52,8 +59,9 @@ module.exports = function liveRoutes({ basicAuth, db, uploadsDir }) {
     const set = streams.get(code);
     const s = set && set.size ? db.getSession(code) : null;
     if (!s) return;
+    const base = baseSnapshot(db, s); // once per broadcast; only `you` differs per client
     for (const c of set) {
-      try { send(c.res, snapshot(db, s, c.token)); }
+      try { send(c.res, withYou(db, s, base, c.token)); }
       catch { set.delete(c); } // dead stream: drop it, keep fanning out to the rest
     }
   };

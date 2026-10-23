@@ -240,3 +240,39 @@ test('shape round: live guesses score by nearest point; reveal carries geometry 
       [['Fer', 0, 100, { lat: 0, lng: 7 }], ['Ana', 111.2, 82, { lat: 0, lng: 5 }]]);
   });
 });
+
+test('events: `you` stays per-connection when a broadcast shares one base snapshot', async () => {
+  await withServer(async ({ base, game }) => {
+    const { code } = await (await post(`${base}/game/api/admin/games/${game.id}/sessions`, undefined, auth)).json();
+    const fer = await (await post(`${base}/game/live/api/${code}/join`, { name: 'Fer' })).json();
+    const ana = await (await post(`${base}/game/live/api/${code}/join`, { name: 'Ana' })).json();
+    const open = async (p) => {
+      const ac = new AbortController();
+      const resp = await fetch(`${base}/game/live/api/${code}/events?token=${p.token}`, { signal: ac.signal });
+      const reader = resp.body.getReader(); const buf = { text: '' };
+      await readEvent(reader, buf); // initial snapshot
+      return { ac, reader, buf };
+    };
+    const [a, b] = [await open(fer), await open(ana)];
+    await post(`${base}/game/live/api/${code}/join`, { name: 'Bo' }); // triggers a broadcast
+    const [ea, eb] = [await readEvent(a.reader, a.buf), await readEvent(b.reader, b.buf)];
+    assert.deepEqual(ea.data.you, { playerId: fer.playerId, name: 'Fer' });
+    assert.deepEqual(eb.data.you, { playerId: ana.playerId, name: 'Ana' });
+    assert.equal(ea.data.players.length, 3);
+    a.ac.abort(); b.ac.abort();
+  });
+});
+
+test('point round on the live reveal: truth.geometry is null and nearest is the round point', async () => {
+  await withServer(async ({ base, db }) => {
+    const g = db.createGame('Points');
+    db.saveGame(g.id, 'Points', [{ question: 'Where?', lat: 12.5, lng: 34.5, radius: 10 }]);
+    const { code } = await (await post(`${base}/game/api/admin/games/${g.id}/sessions`, undefined, auth)).json();
+    const fer = await (await post(`${base}/game/live/api/${code}/join`, { name: 'Fer' })).json();
+    await next(base, code); // open
+    await post(`${base}/game/live/api/${code}/guess`, { token: fer.token, ord: 0, lat: 0, lng: 0 });
+    const snap = await (await next(base, code)).json(); // revealed
+    assert.equal(snap.reveal.truth.geometry, null);
+    assert.deepEqual(snap.reveal.guesses[0].nearest, { lat: 12.5, lng: 34.5 });
+  });
+});

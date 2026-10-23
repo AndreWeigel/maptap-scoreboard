@@ -124,3 +124,19 @@ test('normalizeGeometry: vertex and byte caps', () => {
   const fat = JSON.stringify({ type: 'LineString', coordinates: [[0, 0], [1, 1]], pad: 'x'.repeat(1000001) });
   assert.deepEqual(normalizeGeometry(fat), { error: 'shape too big — simplify it at mapshaper.org (max 5,000 points)' });
 });
+
+test('normalizeGeometry rejects lines and rings that cross the 180° meridian', () => {
+  const msg = 'shapes that cross the 180° meridian are not supported';
+  const ring = [[178, -17], [-178, -17], [-178, -19], [178, -19]];
+  assert.deepEqual(normalizeGeometry({ type: 'Polygon', coordinates: [ring] }), { error: msg });
+  assert.deepEqual(normalizeGeometry({ type: 'LineString', coordinates: [[179, 0], [-179, 0]] }), { error: msg });
+});
+
+test('nearestOnGeometry handles a segment over the antimeridian (normalisation refuses it, the vector math does not)', () => {
+  const r = nearestOnGeometry(0, 180, { type: 'LineString', coordinates: [[179, 0], [-179, 0]] });
+  assert.ok(Math.abs(r.km) < 1e-6);
+});
+
+test('normalizeGeometry rejects inherited object keys as geometry types', () => {
+  assert.deepEqual(normalizeGeometry({ type: 'constructor', coordinates: [0, 0] }), { error: 'invalid shape' });
+});
