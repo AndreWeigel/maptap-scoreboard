@@ -3,7 +3,8 @@
 const path = require('node:path');
 const express = require('express');
 const { openGameDb } = require('./db');
-const { haversineKm, points } = require('./scoring');
+const { points, distanceToRound } = require('./scoring');
+const { normalizeGeometry, bboxCenter } = require('./geo');
 const liveRoutes = require('./live');
 
 const VIEWS = path.join(__dirname, '..', '..', 'views', 'game');
@@ -15,22 +16,27 @@ const optStr = (v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
 const validCoords = (lat, lng) =>
   Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lng) && Math.abs(lng) <= 180;
 
-// Round from the builder → clean row, or null if invalid.
+// Round from the builder → { round } with a clean row, or { error } with the message to show.
 function cleanRound(r) {
-  if (!r || typeof r !== 'object') return null;
+  if (!r || typeof r !== 'object') return { error: 'invalid round' };
   const question = optStr(r.question);
-  if (!question) return null;
-  if (!Number.isFinite(r.lat) || Math.abs(r.lat) > 90) return null;
-  if (!Number.isFinite(r.lng) || Math.abs(r.lng) > 180) return null;
-  if (r.photo != null && !PHOTO_FILE.test(r.photo)) return null;
+  if (!question) return { error: 'invalid round' };
+  let geometry = normalizeGeometry(r.geometry);
+  if (geometry && geometry.error) return geometry;
+  let { lat, lng } = r;
+  if (geometry && geometry.type === 'Point') { [lng, lat] = geometry.coordinates; geometry = null; } // a point is a point round
+  else if (geometry) ({ lat, lng } = bboxCenter(geometry)); // the anchor can never disagree with the shape
+  if (!validCoords(lat, lng)) return { error: 'invalid round' };
+  if (r.photo != null && !PHOTO_FILE.test(r.photo)) return { error: 'invalid round' };
   // radius: optional "full points within this many km" tolerance (trivia rounds)
-  if (r.radius != null && !(Number.isFinite(r.radius) && r.radius > 0 && r.radius <= 10000)) return null;
-  return {
-    question, lat: r.lat, lng: r.lng,
+  if (r.radius != null && !(Number.isFinite(r.radius) && r.radius > 0 && r.radius <= 10000)) return { error: 'invalid round' };
+  return { round: {
+    question, lat, lng,
     city: optStr(r.city), country: optStr(r.country),
     photo: r.photo || undefined, story: optStr(r.story),
     answer: optStr(r.answer), radius: r.radius ?? undefined,
-  };
+    geometry: geometry || undefined,
+  } };
 }
 
 module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db', uploadsDir = 'data/uploads' }) {
@@ -57,11 +63,14 @@ module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db', uploa
     if (!db.getGame(+req.params.id)) return res.status(404).json({ error: 'no such game' });
     const b = req.body || {};
     const title = optStr(b.title);
-    const rounds = Array.isArray(b.rounds) ? b.rounds.map(cleanRound) : null;
-    if (!title || !rounds || rounds.includes(null)) {
-      return res.status(400).json({ error: 'invalid title or rounds' });
+    if (!title || !Array.isArray(b.rounds)) return res.status(400).json({ error: 'invalid title or rounds' });
+    const cleaned = b.rounds.map(cleanRound);
+    const bad = cleaned.findIndex((c) => c.error);
+    if (bad !== -1) {
+      const error = cleaned[bad].error === 'invalid round' ? 'invalid title or rounds' : cleaned[bad].error;
+      return res.status(400).json({ error, round: bad });
     }
-    res.json(db.saveGame(+req.params.id, title, rounds));
+    res.json(db.saveGame(+req.params.id, title, cleaned.map((c) => c.round)));
   });
 
   router.delete('/api/admin/games/:id', basicAuth, (req, res) => {
@@ -85,9 +94,9 @@ module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db', uploa
     const round = g.rounds.find((r) => r.ord === b.ord);
     if (!round) return res.status(404).json({ error: 'no such round' });
     if (!validCoords(b.lat, b.lng)) return res.status(400).json({ error: 'bad coords' });
-    const km = Math.round(haversineKm(b.lat, b.lng, round.lat, round.lng) * 10) / 10;
+    const { km, nearest } = distanceToRound(b.lat, b.lng, round);
     const { question, ord, game_id, id, ...truth } = round;
-    res.json({ km, points: points(km, round.radius ?? undefined), truth });
+    res.json({ km, nearest, points: points(km, round.radius ?? undefined), truth });
   });
 
   // Final submit: every point is recomputed here — client totals are never trusted.
@@ -103,7 +112,7 @@ module.exports = function gameRoutes({ basicAuth, dbPath = 'data/game.db', uploa
     }
     const scored = g.rounds.map((r) => {
       const x = byOrd.get(r.ord);
-      const km = Math.round(haversineKm(x.lat, x.lng, r.lat, r.lng) * 10) / 10;
+      const { km } = distanceToRound(x.lat, x.lng, r);
       return { round_ord: r.ord, lat: x.lat, lng: x.lng, km, points: points(km, r.radius ?? undefined) };
     });
     const total = scored.reduce((s, x) => s + x.points, 0);

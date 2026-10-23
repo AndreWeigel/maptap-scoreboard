@@ -182,3 +182,72 @@ test('live routes are mounted before the /:slug catch-all', async () => {
     assert.equal((await fetch(`${base}/game/${g.slug}`)).status, 200); // the old play page still resolves
   });
 });
+
+const LINE = { type: 'LineString', coordinates: [[0, 0], [10, 0]] };
+
+async function lineGame(base) {
+  const g = await (await fetch(`${base}/game/api/admin/games`, {
+    method: 'POST', headers: json, body: JSON.stringify({ title: 'shapes' }),
+  })).json();
+  const put = await fetch(`${base}/game/api/admin/games/${g.id}`, {
+    method: 'PUT', headers: json,
+    body: JSON.stringify({ title: 'shapes', rounds: [
+      { question: 'Where is the equator line?', lat: 99, lng: 99, geometry: { type: 'Feature', properties: { a: 1 }, geometry: LINE }, radius: 10 },
+      { question: 'Point?', lat: 1, lng: 2, geometry: { type: 'Point', coordinates: [5, 6] } },
+    ] }),
+  });
+  assert.equal(put.status, 200);
+  return g;
+}
+
+test('PUT stores a shape (Feature unwrapped), sets lat/lng to the bbox centre, collapses a Point', async () => {
+  await withServer(async (base) => {
+    const g = await lineGame(base);
+    const { rounds } = await (await fetch(`${base}/game/api/admin/games/${g.id}`, { headers: auth })).json();
+    assert.deepEqual(rounds[0].geometry, LINE);
+    assert.deepEqual([rounds[0].lat, rounds[0].lng], [0, 5]);
+    assert.equal(rounds[1].geometry, null);
+    assert.deepEqual([rounds[1].lat, rounds[1].lng], [6, 5]); // from the Point [lng 5, lat 6]
+    const pub = await (await fetch(`${base}/game/api/${g.slug}`)).json();
+    assert.deepEqual(Object.keys(pub.rounds[0]).sort(), ['ord', 'question']); // the shape is the answer
+  });
+});
+
+test('PUT rejects a bad shape with the message and the round index', async () => {
+  await withServer(async (base) => {
+    const g = await (await fetch(`${base}/game/api/admin/games`, {
+      method: 'POST', headers: json, body: JSON.stringify({ title: 't' }),
+    })).json();
+    const resp = await fetch(`${base}/game/api/admin/games/${g.id}`, {
+      method: 'PUT', headers: json,
+      body: JSON.stringify({ title: 't', rounds: [
+        { question: 'ok', lat: 1, lng: 2 },
+        { question: 'bad', lat: 1, lng: 2, geometry: { type: 'LineString', coordinates: [[0, 0]] } },
+      ] }),
+    });
+    assert.equal(resp.status, 400);
+    assert.deepEqual(await resp.json(), { error: 'invalid shape', round: 1 });
+  });
+});
+
+test('guess against a line: km to the nearest point, nearest returned, truth carries the geometry; plays score the same', async () => {
+  await withServer(async (base) => {
+    const g = await lineGame(base);
+    const r = await (await fetch(`${base}/game/api/${g.slug}/guess`, {
+      method: 'POST', headers: json, body: JSON.stringify({ ord: 0, lat: 1, lng: 5 }),
+    })).json();
+    assert.equal(r.km, 111.2);
+    assert.deepEqual(r.nearest, { lat: 0, lng: 5 });
+    assert.deepEqual(r.truth.geometry, LINE);
+    assert.equal(r.points, 82); // radius 10: round(100 * exp(-(111.2 - 10) / 500))
+    const on = await (await fetch(`${base}/game/api/${g.slug}/guess`, {
+      method: 'POST', headers: json, body: JSON.stringify({ ord: 0, lat: 0, lng: 7 }),
+    })).json();
+    assert.equal(on.km, 0); assert.equal(on.points, 100);
+    const play = await (await fetch(`${base}/game/api/${g.slug}/plays`, {
+      method: 'POST', headers: json,
+      body: JSON.stringify({ player_name: 'Fer', guesses: [{ ord: 0, lat: 1, lng: 5 }, { ord: 1, lat: 6, lng: 5 }] }),
+    })).json();
+    assert.deepEqual(play.rounds.map((x) => [x.km, x.points]), [[111.2, 82], [0, 100]]);
+  });
+});
