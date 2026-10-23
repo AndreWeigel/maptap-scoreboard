@@ -156,12 +156,25 @@ window.map = map; // console/debug handle
 
 const EMPTY = { type: 'FeatureCollection', features: [] };
 let ready = false; // map.loaded() is false whenever tiles are in flight and 'load' fires once, so track readiness ourselves
+// The reveal geometry as a feature: the round's shape, or a point at the anchor.
+const truthFeature = (t) => ({ type: 'Feature', geometry: t.geometry || { type: 'Point', coordinates: [t.lng, t.lat] } });
+// Extend bounds by every position of a geometry.
+const extendBy = (bounds, geometry) => {
+  const walk = (c) => (typeof c[0] === 'number' ? bounds.extend(c) : c.forEach(walk));
+  walk(geometry.coordinates);
+  return bounds;
+};
 map.on('load', () => {
   map.addSource('truth', { type: 'geojson', data: EMPTY });
   map.addSource('lines', { type: 'geojson', data: EMPTY });
+  // A shape round renders as fill + outline, a point round as the dot — geometry-type picks per feature.
+  map.addLayer({ id: 'truth-fill', type: 'fill', source: 'truth', filter: ['==', ['geometry-type'], 'Polygon'],
+    paint: { 'fill-color': '#ffd15c', 'fill-opacity': 0.25 } });
   map.addLayer({ id: 'lines', type: 'line', source: 'lines',
     paint: { 'line-color': '#ffffff', 'line-opacity': .7, 'line-width': 1.5, 'line-dasharray': [1.5, 1.5] } });
-  map.addLayer({ id: 'truth', type: 'circle', source: 'truth',
+  map.addLayer({ id: 'truth-line', type: 'line', source: 'truth', filter: ['!=', ['geometry-type'], 'Point'],
+    paint: { 'line-color': '#ffd15c', 'line-width': 3 } });
+  map.addLayer({ id: 'truth', type: 'circle', source: 'truth', filter: ['==', ['geometry-type'], 'Point'],
     paint: { 'circle-radius': 7, 'circle-color': '#ffd15c', 'circle-stroke-color': '#070b1c', 'circle-stroke-width': 2 } });
   ready = true;
 });
@@ -228,11 +241,12 @@ function renderReveal(roundChanged) {
     return new maplibregl.Marker({ element: node, anchor: 'left', offset: [-6, 0] }).setLngLat([g.lng, g.lat]).addTo(map);
   });
   whenLoaded(() => {
-    map.getSource('truth').setData({ type: 'Feature', geometry: { type: 'Point', coordinates: [truth.lng, truth.lat] } });
+    const tf = truthFeature(truth);
+    map.getSource('truth').setData(tf);
     map.getSource('lines').setData({ type: 'FeatureCollection', features: guesses.map((g) => ({
-      type: 'Feature', geometry: { type: 'LineString', coordinates: [[g.lng, g.lat], [truth.lng, truth.lat]] } })) });
+      type: 'Feature', geometry: { type: 'LineString', coordinates: [[g.lng, g.lat], [g.nearest.lng, g.nearest.lat]] } })) });
     if (!roundChanged) return; // late joiners / rebroadcasts must not yank the camera
-    const b = new maplibregl.LngLatBounds([truth.lng, truth.lat], [truth.lng, truth.lat]);
+    const b = extendBy(new maplibregl.LngLatBounds([truth.lng, truth.lat], [truth.lng, truth.lat]), tf.geometry);
     for (const g of guesses) b.extend([g.lng, g.lat]);
     // wide screens: the result panel sits on the right; phones: it sits across the top
     const padding = innerWidth < 700 ? { top: 460, bottom: 50, left: 50, right: 50 } : { top: 110, bottom: 80, left: 60, right: 360 };

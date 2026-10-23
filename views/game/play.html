@@ -116,12 +116,25 @@ let playerName = '';
 try { playerName = localStorage.getItem('maptap:player') || ''; } catch {}
 
 const EMPTY = { type: 'FeatureCollection', features: [] };
+// The reveal geometry as a feature: the round's shape, or a point at the anchor.
+const truthFeature = (t) => ({ type: 'Feature', geometry: t.geometry || { type: 'Point', coordinates: [t.lng, t.lat] } });
+// Extend bounds by every position of a geometry.
+const extendBy = (bounds, geometry) => {
+  const walk = (c) => (typeof c[0] === 'number' ? bounds.extend(c) : c.forEach(walk));
+  walk(geometry.coordinates);
+  return bounds;
+};
 map.on('load', () => {
   map.addSource('truth', { type: 'geojson', data: EMPTY });
   map.addSource('line', { type: 'geojson', data: EMPTY });
+  // A shape round renders as fill + outline, a point round as the dot — geometry-type picks per feature.
+  map.addLayer({ id: 'truth-fill', type: 'fill', source: 'truth', filter: ['==', ['geometry-type'], 'Polygon'],
+    paint: { 'fill-color': '#ffd15c', 'fill-opacity': 0.25 } });
   map.addLayer({ id: 'line', type: 'line', source: 'line',
     paint: { 'line-color': '#22d3ee', 'line-width': 2, 'line-dasharray': [1.5, 1.5] } });
-  map.addLayer({ id: 'truth', type: 'circle', source: 'truth',
+  map.addLayer({ id: 'truth-line', type: 'line', source: 'truth', filter: ['!=', ['geometry-type'], 'Point'],
+    paint: { 'line-color': '#ffd15c', 'line-width': 3 } });
+  map.addLayer({ id: 'truth', type: 'circle', source: 'truth', filter: ['==', ['geometry-type'], 'Point'],
     paint: { 'circle-radius': 6, 'circle-color': '#ffd15c', 'circle-stroke-color': '#070b1c', 'circle-stroke-width': 2 } });
 });
 
@@ -186,12 +199,12 @@ async function confirmGuess() {
     r = await resp.json();
   } catch { phase = 'guess'; $('action').hidden = false; $('hint').textContent = 'network hiccup — try confirm again'; return; }
   guesses.push({ ord: game.rounds[ord].ord, lat, lng });
-  const truthPt = { type: 'Feature', geometry: { type: 'Point', coordinates: [r.truth.lng, r.truth.lat] } };
-  map.getSource('truth').setData(truthPt);
+  const tf = truthFeature(r.truth);
+  map.getSource('truth').setData(tf);
   map.getSource('line').setData({ type: 'Feature', geometry: {
-    type: 'LineString', coordinates: [[lng, lat], [r.truth.lng, r.truth.lat]] } });
-  map.fitBounds(new maplibregl.LngLatBounds([lng, lat], [lng, lat]).extend([r.truth.lng, r.truth.lat]),
-    { padding: 90, maxZoom: 9, duration: RM ? 0 : 1200 });
+    type: 'LineString', coordinates: [[lng, lat], [r.nearest.lng, r.nearest.lat]] } });
+  const bounds = extendBy(new maplibregl.LngLatBounds([lng, lat], [lng, lat]), tf.geometry);
+  map.fitBounds(bounds, { padding: 90, maxZoom: 9, duration: RM ? 0 : 1200 });
   showReveal(r);
   setBanner(game.rounds[ord].question, '');
   const last = ord === game.rounds.length - 1;
