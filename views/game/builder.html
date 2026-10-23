@@ -121,23 +121,37 @@ let editing = null; // { game, rounds, dirty }
 const fmtCoords = (r) => Number.isFinite(r.lat) ? `${r.lat}, ${r.lng}` : '';
 // Client-side read of pasted GeoJSON: enough to label it and place the anchor. The server re-validates.
 const KINDS = { Point: 'point', MultiPoint: 'point', LineString: 'line', MultiLineString: 'line', Polygon: 'area', MultiPolygon: 'area' };
+const ERR_180 = 'shapes that cross the 180° meridian are not supported';
 function parseShape(text) {
   let v;
   try { v = JSON.parse(text); } catch { return { error: 'not valid JSON' }; }
   let geoms = v && v.type === 'Feature' ? [v.geometry] : v && v.type === 'FeatureCollection' ? (v.features || []).map((f) => f && f.geometry) : [v];
   geoms = geoms.filter(Boolean);
-  if (!geoms.length || geoms.some((g) => !KINDS[g.type] || !Array.isArray(g.coordinates))) return { error: 'invalid shape' };
+  if (!geoms.length || geoms.some((g) => typeof g.type !== 'string' || !Object.hasOwn(KINDS, g.type) || !Array.isArray(g.coordinates))) return { error: 'invalid shape' };
   if (new Set(geoms.map((g) => KINDS[g.type])).size > 1) return { error: 'paste one kind of shape (all lines, or all areas)' };
-  const geometry = geoms.length === 1 ? geoms[0] : v; // the server merges a FeatureCollection; send it as pasted
-  let n = 0, minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-  const walk = (c) => { if (typeof c[0] === 'number') { n++; minLng = Math.min(minLng, c[0]); maxLng = Math.max(maxLng, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]); } else if (Array.isArray(c)) c.forEach(walk); };
+  const kind = KINDS[geoms[0].type];
+  let n = 0, invalid = false, minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  const walk = (c) => {
+    if (!Array.isArray(c)) { invalid = true; return; }
+    if (typeof c[0] === 'number') {
+      if (typeof c[1] !== 'number') { invalid = true; return; }
+      n++; minLng = Math.min(minLng, c[0]); maxLng = Math.max(maxLng, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]);
+    } else c.forEach(walk);
+  };
   for (const g of geoms) walk(g.coordinates);
-  if (!n || ![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) return { error: 'invalid shape' };
-  const label = `${geoms.length === 1 ? geoms[0].type : geoms.length + ' features'} · ${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
-  return { geometry, label, lat: +((minLat + maxLat) / 2).toFixed(5), lng: +((minLng + maxLng) / 2).toFixed(5) };
+  if (invalid || !n || ![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) return { error: 'invalid shape' };
+  // Merge like the server: every feature's parts into one Multi* geometry (or a single one when there is just one part).
+  const parts = geoms.flatMap((g) => (g.type.startsWith('Multi') ? g.coordinates : [g.coordinates]));
+  const base = kind === 'point' ? 'Point' : kind === 'line' ? 'LineString' : 'Polygon';
+  const geometry = parts.length === 1 ? { type: base, coordinates: parts[0] } : { type: 'Multi' + base, coordinates: parts };
+  // Lines and rings are runs of positions; a >180° jump in longitude means they cross the 180° meridian.
+  const runs = kind === 'line' ? parts : kind === 'area' ? parts.flatMap((p) => (Array.isArray(p) ? p : [])) : [];
+  if (runs.some((s) => Array.isArray(s) && s.some((p, i) => i > 0 && Array.isArray(p) && Array.isArray(s[i - 1]) && Math.abs(p[0] - s[i - 1][0]) > 180))) return { error: ERR_180 };
+  return { geometry, label: shapeLabelOf(geometry, n), lat: +((minLat + maxLat) / 2).toFixed(5), lng: +((minLng + maxLng) / 2).toFixed(5) };
 }
-const shapeLabel = (r) => (r.shapeLabel || (r.geometry ? `${r.geometry.type} · ${countPositions(r.geometry).toLocaleString()} points` : ''));
-function countPositions(g) { let n = 0; const walk = (c) => (typeof c[0] === 'number' ? n++ : c.forEach(walk)); walk(g.coordinates); return n; }
+const shapeLabelOf = (g, n) => `${g.type}${g.type.startsWith('Multi') ? ` · ${g.coordinates.length.toLocaleString()} parts` : ''} · ${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
+const shapeLabel = (r) => (r.shapeLabel || (r.geometry ? shapeLabelOf(r.geometry, countPositions(r.geometry)) : ''));
+function countPositions(g) { let n = 0; const walk = (c) => { if (!Array.isArray(c)) return; if (typeof c[0] === 'number') n++; else c.forEach(walk); }; walk(g.coordinates); return n; }
 const setStatus = (t) => { $('status').textContent = t; };
 
 function render() {
@@ -456,8 +470,12 @@ $('back').addEventListener('click', () => {
 });
 
 $('save').addEventListener('click', async () => {
-  const bad = editing.rounds.findIndex((r) => !r.question.trim() || (!Number.isFinite(r.lat) && !r.geometry));
-  if (bad !== -1) return alert(`Round #${bad + 1} needs a question and a location before saving.`);
+  const bad = editing.rounds.findIndex((r) => r.shapeErr || !r.question.trim() || (!Number.isFinite(r.lat) && !r.geometry));
+  if (bad !== -1) {
+    return alert(editing.rounds[bad].shapeErr
+      ? `Round #${bad + 1} has a shape error — fix or clear the shape before saving.`
+      : `Round #${bad + 1} needs a question and a location before saving.`);
+  }
   if ((editing.sessions || []).some((s) => s.state !== 'finished')
     && !confirm('A live session is running on this game. Saving changes the rounds under it. Continue?')) return;
   $('save').disabled = true;
