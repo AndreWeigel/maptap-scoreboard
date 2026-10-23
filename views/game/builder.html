@@ -63,6 +63,14 @@
   .ansrow .answer { flex: 1; min-width: 0; }
   .ansrow .radius { width: 64px; text-align: right; }
   .ansrow .unit { font: .78rem var(--mono); color: var(--muted); }
+  details.shape { margin: 8px 0; border: 1px dashed var(--border); border-radius: 8px; padding: 6px 10px; }
+  details.shape summary { cursor: pointer; font: .78rem var(--mono); color: var(--muted); }
+  details.shape textarea { width: 100%; min-height: 64px; resize: vertical; font: .75rem var(--mono); margin-top: 6px; }
+  details.shape .st { font: .75rem var(--mono); color: var(--muted); margin: 4px 0; }
+  details.shape .st.ok { color: var(--cyan); }
+  details.shape .st.err { color: var(--red); }
+  details.shape .links { font: .75rem var(--mono); color: var(--muted); margin: 4px 0; }
+  details.shape .links a { color: var(--cyan); text-decoration: none; }
   .phrow { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
   .phrow img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
   .addph { display: inline-flex; align-items: center; justify-content: center; width: 96px; height: 72px; cursor: pointer;
@@ -111,6 +119,24 @@ let games = [];
 let editing = null; // { game, rounds, dirty }
 
 const fmtCoords = (r) => Number.isFinite(r.lat) ? `${r.lat}, ${r.lng}` : '';
+// Client-side read of pasted GeoJSON: enough to label it and place the anchor. The server re-validates.
+const KINDS = { Point: 'point', MultiPoint: 'point', LineString: 'line', MultiLineString: 'line', Polygon: 'area', MultiPolygon: 'area' };
+function parseShape(text) {
+  let v;
+  try { v = JSON.parse(text); } catch { return { error: 'not valid JSON' }; }
+  let geoms = v && v.type === 'Feature' ? [v.geometry] : v && v.type === 'FeatureCollection' ? (v.features || []).map((f) => f && f.geometry) : [v];
+  geoms = geoms.filter(Boolean);
+  if (!geoms.length || geoms.some((g) => !KINDS[g.type] || !Array.isArray(g.coordinates))) return { error: 'invalid shape' };
+  if (new Set(geoms.map((g) => KINDS[g.type])).size > 1) return { error: 'paste one kind of shape (all lines, or all areas)' };
+  const geometry = geoms.length === 1 ? geoms[0] : v; // the server merges a FeatureCollection; send it as pasted
+  let n = 0, minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  const walk = (c) => { if (typeof c[0] === 'number') { n++; minLng = Math.min(minLng, c[0]); maxLng = Math.max(maxLng, c[0]); minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]); } else c.forEach(walk); };
+  for (const g of geoms) walk(g.coordinates);
+  const label = `${geoms.length === 1 ? geoms[0].type : geoms.length + ' features'} · ${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
+  return { geometry, label, lat: +((minLat + maxLat) / 2).toFixed(5), lng: +((minLng + maxLng) / 2).toFixed(5) };
+}
+const shapeLabel = (r) => (r.shapeLabel || (r.geometry ? `${r.geometry.type} · ${countPositions(r.geometry).toLocaleString()} points` : ''));
+function countPositions(g) { let n = 0; const walk = (c) => (typeof c[0] === 'number' ? n++ : c.forEach(walk)); walk(g.coordinates); return n; }
 const setStatus = (t) => { $('status').textContent = t; };
 
 function render() {
@@ -157,11 +183,20 @@ function renderEditor() {
       </div>
       <div class="locrow">
         <input type="text" class="city" data-city="${i}" placeholder="City — type, then pick from the list"
-          value="${esc([r.city, r.country].filter(Boolean).join(', '))}">
-        <input type="text" class="coords" data-coords="${i}" placeholder="or lat, lng" value="${esc(fmtCoords(r))}">
-        <button class="sm" data-mappick="${i}" title="Pick the spot on a map" aria-label="Pick the spot on a map">🗺</button>
+          value="${esc([r.city, r.country].filter(Boolean).join(', '))}" ${r.geometry ? 'disabled' : ''}>
+        <input type="text" class="coords" data-coords="${i}" placeholder="or lat, lng" value="${esc(fmtCoords(r))}" ${r.geometry ? 'disabled title="Anchor set from the shape"' : ''}>
+        <button class="sm" data-mappick="${i}" title="${r.geometry ? 'Preview the shape on a map' : 'Pick the spot on a map'}" aria-label="Open the map">🗺</button>
         <span class="geo">${Number.isFinite(r.lat) ? '📍' : '⚠'}</span>
       </div>
+      <details class="shape" ${r.geometry ? 'open' : ''}>
+        <summary>Shape (line or area) — optional${r.geometry ? ` · ${esc(shapeLabel(r))}` : ''}</summary>
+        <textarea data-shape="${i}" placeholder='Paste GeoJSON here — a line or an area, e.g. {"type":"LineString","coordinates":[[lng,lat],[lng,lat]]}'>${esc(r.shapeText ?? (r.geometry ? JSON.stringify(r.geometry) : ''))}</textarea>
+        <div class="st ${r.shapeErr ? 'err' : r.geometry ? 'ok' : ''}">${esc(r.shapeErr || (r.geometry ? shapeLabel(r) + ' · anchor set to its centre' : 'No shape — this round is a point'))}</div>
+        <div class="links">Draw one at <a href="https://geojson.io" target="_blank" rel="noopener">geojson.io</a> ·
+          export from OpenStreetMap at <a href="https://overpass-turbo.eu" target="_blank" rel="noopener">overpass-turbo.eu</a> ·
+          simplify big files at <a href="https://mapshaper.org" target="_blank" rel="noopener">mapshaper.org</a></div>
+        ${r.geometry ? `<button class="sm" data-mappick="${i}">Preview</button> <button class="sm" data-shapeclear="${i}">Clear shape</button>` : ''}
+      </details>
       <div class="ansrow">
         <input type="text" class="answer" data-answer="${i}" value="${esc(r.answer || '')}" aria-label="Answer label for the reveal"
           placeholder="Answer label for the reveal (optional) — e.g. Tanggula, Qinghai–Tibet Railway, China">
@@ -203,12 +238,25 @@ function copyLink(slug) {
 
 // Full-screen click-to-pick map. MapLibre loads lazily on first open (~1MB —
 // only game builders pay for it, and only if they use the map).
-let pickmap = null, pickIdx = null;
+let pickmap = null, pickIdx = null, maplibregl = null, pickReady = false;
+// Draw the current round's shape on the picker (or clear it) and frame it.
+function showShape() {
+  if (!pickReady) return;
+  const r = editing && editing.rounds[pickIdx];
+  const g = r && r.geometry;
+  pickmap.getSource('shape').setData(g ? { type: 'Feature', geometry: g } : { type: 'FeatureCollection', features: [] });
+  document.querySelector('.maphint').textContent = g ? 'Previewing the shape — clear it on the card to pick a point' : 'Tap the secret spot — zoom in for precision';
+  if (!g) return;
+  const b = new maplibregl.LngLatBounds();
+  const walk = (c) => (typeof c[0] === 'number' ? b.extend(c) : c.forEach(walk));
+  walk(g.coordinates);
+  pickmap.fitBounds(b, { padding: 60, maxZoom: 9, duration: 0 });
+}
 async function openMapPicker(i) {
   pickIdx = i;
   $('mapmodal').hidden = false;
   if (!pickmap) {
-    const maplibregl = await import('https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs');
+    maplibregl = await import('https://cdn.jsdelivr.net/npm/maplibre-gl@6.6.0/dist/maplibre-gl.mjs');
     pickmap = new maplibregl.Map({
       container: 'pickmap',
       attributionControl: false, // .mapcredit carries the Esri notice
@@ -219,7 +267,18 @@ async function openMapPicker(i) {
         layers: [{ id: 'sat', type: 'raster', source: 'sat' }] },
     });
     window.pickmap = pickmap; // console/debug handle (screenshot driver uses it)
+    pickmap.on('load', () => {
+      pickmap.addSource('shape', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      pickmap.addLayer({ id: 'shape-fill', type: 'fill', source: 'shape', filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#ffd15c', 'fill-opacity': 0.25 } });
+      pickmap.addLayer({ id: 'shape-line', type: 'line', source: 'shape', filter: ['!=', ['geometry-type'], 'Point'],
+        paint: { 'line-color': '#ffd15c', 'line-width': 3 } });
+      pickmap.addLayer({ id: 'shape-pt', type: 'circle', source: 'shape', filter: ['==', ['geometry-type'], 'Point'],
+        paint: { 'circle-radius': 6, 'circle-color': '#ffd15c', 'circle-stroke-color': '#070b1c', 'circle-stroke-width': 2 } });
+      pickReady = true; showShape();
+    });
     pickmap.on('click', async (e) => {
+      if (editing && editing.rounds[pickIdx] && editing.rounds[pickIdx].geometry) return;
       const r = editing && editing.rounds[pickIdx];
       if (!r) return;
       r.lat = +e.lngLat.lat.toFixed(5);
@@ -240,6 +299,7 @@ async function openMapPicker(i) {
   const r = editing.rounds[i];
   if (Number.isFinite(r.lat)) pickmap.jumpTo({ center: [r.lng, r.lat], zoom: 8 });
   pickmap.resize(); // the container was display:none when the map last measured itself
+  showShape();
 }
 $('mapclose').addEventListener('click', () => { $('mapmodal').hidden = true; });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('mapmodal').hidden = true; });
@@ -284,6 +344,12 @@ main.addEventListener('click', async (e) => {
   if (down !== undefined) return swap(+down, +down + 1);
   if (delround !== undefined) { editing.rounds.splice(+delround, 1); editing.dirty = true; return render(); }
   if (delphoto !== undefined) { delete editing.rounds[+delphoto].photo; editing.dirty = true; return render(); }
+  const shapeclear = btn('shapeclear');
+  if (shapeclear !== undefined) {
+    const r = editing.rounds[+shapeclear];
+    delete r.geometry; delete r.shapeText; delete r.shapeLabel; delete r.shapeErr;
+    editing.dirty = true; return render();
+  }
 });
 
 main.addEventListener('change', async (e) => {
@@ -303,6 +369,18 @@ main.addEventListener('change', async (e) => {
   if (el) {
     const r = editing.rounds[i], v = parseFloat(el.value);
     if (Number.isFinite(v) && v > 0) r.radius = v; else delete r.radius;
+    editing.dirty = true; return render();
+  }
+  [i, el] = val('shape');
+  if (el) {
+    const r = editing.rounds[i], text = el.value.trim();
+    delete r.shapeErr;
+    if (!text) { delete r.geometry; delete r.shapeText; delete r.shapeLabel; editing.dirty = true; return render(); }
+    const p = parseShape(text);
+    r.shapeText = text;
+    if (p.error) { r.shapeErr = p.error; return render(); }
+    r.geometry = p.geometry; r.shapeLabel = p.label;
+    r.lat = p.lat; r.lng = p.lng; delete r.city; delete r.country;
     editing.dirty = true; return render();
   }
   [i, el] = val('coords');
@@ -377,7 +455,7 @@ $('back').addEventListener('click', () => {
 });
 
 $('save').addEventListener('click', async () => {
-  const bad = editing.rounds.findIndex((r) => !r.question.trim() || !Number.isFinite(r.lat));
+  const bad = editing.rounds.findIndex((r) => !r.question.trim() || (!Number.isFinite(r.lat) && !r.geometry));
   if (bad !== -1) return alert(`Round #${bad + 1} needs a question and a location before saving.`);
   if ((editing.sessions || []).some((s) => s.state !== 'finished')
     && !confirm('A live session is running on this game. Saving changes the rounds under it. Continue?')) return;
@@ -386,8 +464,18 @@ $('save').addEventListener('click', async () => {
   try {
     const resp = await fetch(`/game/api/admin/games/${editing.game.id}`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: editing.game.title, rounds: editing.rounds }),
+      body: JSON.stringify({ title: editing.game.title,
+        rounds: editing.rounds.map(({ shapeText, shapeLabel, shapeErr, ...r }) => r) }),
     });
+    if (resp.status === 400) {
+      const d = await resp.json();
+      if (Number.isInteger(d.round) && editing.rounds[d.round]) {
+        editing.rounds[d.round].shapeErr = d.error;
+        render();
+        document.querySelectorAll('.round')[d.round].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setStatus(d.error); $('save').disabled = false; return;
+    }
     if (!resp.ok) throw new Error(resp.status);
     const d = await resp.json();
     editing = { game: d.game, rounds: d.rounds, sessions: editing.sessions, dirty: false };
