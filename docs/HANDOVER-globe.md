@@ -109,11 +109,11 @@ The interesting parts, all in [globe.html](views/globe.html):
    is a stub server route `/slow?ms=25000` (a 1×1 gif delayed N ms) embedded in
    a driver page, so headless Chrome's shutter waits in *real* time. The driver
    iframes the target and steers it via `window.map` / `window.playState`.
-5. **Node version.** Production is `node:20-bookworm-slim` (Dockerfile). This
+5. **Node version.** Production is `node:22-bookworm-slim` (Dockerfile). This
    machine currently runs Node 26.3.0, and **better-sqlite3 11.x will not build
    against it** — no prebuild for the v147 ABI, and the source fails on removed
    V8 APIs (`GetPrototype`, `Context::GetIsolate`, `PropertyCallbackInfo::This`).
-   Use nvm to drop to Node 20/22 for local work, or bump better-sqlite3.
+   Use nvm to drop to Node 22 for local work, or bump better-sqlite3.
    Right now `node_modules/better-sqlite3` on this machine is unbuilt — any
    test touching a DB fails until that's resolved.
 6. **`node --test test/` no longer works on Node ≥26** (the directory arg is
